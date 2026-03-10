@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <radialGradient id="planetGrad" cx="45%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="40%" stop-color="#7c3aed"/>
+      <stop offset="80%" stop-color="#4c1d95"/>
+      <stop offset="100%" stop-color="#2d1b69"/>
+    </radialGradient>
+    <radialGradient id="glowGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ringGrad1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0"/>
+      <stop offset="20%" stop-color="#06b6d4" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#a78bfa" stop-opacity="0.9"/>
+      <stop offset="80%" stop-color="#06b6d4" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="ringGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f472b6" stop-opacity="0"/>
+      <stop offset="20%" stop-color="#f472b6" stop-opacity="0.5"/>
+      <stop offset="50%" stop-color="#c084fc" stop-opacity="0.6"/>
+      <stop offset="80%" stop-color="#f472b6" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#f472b6" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="ringGrad3" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2dd4bf" stop-opacity="0"/>
+      <stop offset="25%" stop-color="#2dd4bf" stop-opacity="0.3"/>
+      <stop offset="50%" stop-color="#60a5fa" stop-opacity="0.4"/>
+      <stop offset="75%" stop-color="#2dd4bf" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#2dd4bf" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="planetGlow">
+      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="planetClip">
+      <ellipse cx="100" cy="100" rx="42" ry="42"/>
+    </clipPath>
+  </defs>
+
+  <!-- Outer glow -->
+  <ellipse cx="100" cy="100" rx="70" ry="70" fill="url(#glowGrad)"/>
+
+  <!-- Ring back (behind planet) -->
+  <!-- Ring 3 back half -->
+  <ellipse cx="100" cy="100" rx="88" ry="18" fill="none" stroke="url(#ringGrad3)" stroke-width="4" opacity="0.5"
+    stroke-dasharray="0 181 207 1000"/>
+  <!-- Ring 2 back half -->
+  <ellipse cx="100" cy="100" rx="76" ry="14" fill="none" stroke="url(#ringGrad2)" stroke-width="5" opacity="0.6"
+    stroke-dasharray="0 159 183 1000"/>
+  <!-- Ring 1 back half -->
+  <ellipse cx="100" cy="100" rx="64" ry="10" fill="none" stroke="url(#ringGrad1)" stroke-width="6" opacity="0.7"
+    stroke-dasharray="0 133 155 1000"/>
+
+  <!-- Planet body -->
+  <ellipse cx="100" cy="100" rx="42" ry="42" fill="url(#planetGrad)" filter="url(#planetGlow)"/>
+
+  <!-- Planet surface bands -->
+  <ellipse cx="100" cy="95" rx="42" ry="6" fill="rgba(255,255,255,0.04)" clip-path="url(#planetClip)"/>
+  <ellipse cx="100" cy="107" rx="42" ry="5" fill="rgba(255,255,255,0.03)" clip-path="url(#planetClip)"/>
+  <ellipse cx="100" cy="87" rx="42" ry="4" fill="rgba(192,132,252,0.12)" clip-path="url(#planetClip)"/>
+
+  <!-- Planet shine -->
+  <ellipse cx="88" cy="88" rx="14" ry="10" fill="rgba(255,255,255,0.12)" clip-path="url(#planetClip)"/>
+
+  <!-- Ring front (in front of planet) -->
+  <!-- Ring 1 front half -->
+  <ellipse cx="100" cy="100" rx="64" ry="10" fill="none" stroke="url(#ringGrad1)" stroke-width="6" opacity="0.9"
+    stroke-dasharray="133 155"/>
+  <!-- Ring 2 front half -->
+  <ellipse cx="100" cy="100" rx="76" ry="14" fill="none" stroke="url(#ringGrad2)" stroke-width="5" opacity="0.75"
+    stroke-dasharray="159 183"/>
+  <!-- Ring 3 front half -->
+  <ellipse cx="100" cy="100" rx="88" ry="18" fill="none" stroke="url(#ringGrad3)" stroke-width="4" opacity="0.6"
+    stroke-dasharray="181 207"/>
+
+  <!-- Stars around logo -->
+  <circle cx="30" cy="35" r="1.5" fill="#a78bfa" opacity="0.8"/>
+  <circle cx="160" cy="45" r="1" fill="#06b6d4" opacity="0.7"/>
+  <circle cx="170" cy="155" r="1.5" fill="#f472b6" opacity="0.6"/>
+  <circle cx="25" cy="165" r="1" fill="#60a5fa" opacity="0.8"/>
+  <circle cx="145" cy="25" r="1" fill="#2dd4bf" opacity="0.7"/>
+  <circle cx="55" cy="175" r="1.2" fill="#c084fc" opacity="0.6"/>
+  <circle cx="178" cy="95" r="0.8" fill="#fff" opacity="0.5"/>
+  <circle cx="18" cy="105" r="0.8" fill="#fff" opacity="0.5"/>
+</svg>

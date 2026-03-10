@@ -1,0 +1,281 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Nunito:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ══════════════════════════════════════════════════════════
+   DARK THEME (default)
+══════════════════════════════════════════════════════════ */
+:root {
+  --c-bg:           #04040d;
+  --c-surface:      #0a0a1a;
+  --c-surface2:     #0e0e22;
+  --c-border:       rgba(255,255,255,0.08);
+  --c-text:         #e2e8f0;
+  --c-muted:        #64748b;
+  --c-input-bg:     #0a0a18;
+  --c-input-border: rgba(255,255,255,0.10);
+  --sidebar-bg:     #050510f8;
+  --navbar-bg:      #070712f5;
+  --dropdown-bg:    #0e0e22;
+  --c-accent:       #7c3aed;
+  --c-accent2:      #06b6d4;
+  --c-card-hover:   rgba(124,58,237,0.05);
+}
+
+/* ══════════════════════════════════════════════════════════
+   LIGHT THEME — completely redesigned
+══════════════════════════════════════════════════════════ */
+[data-theme='light'] {
+  --c-bg:           #f0f0fc;
+  --c-surface:      #ffffff;
+  --c-surface2:     #f5f5ff;
+  --c-border:       rgba(120,100,220,0.15);
+  --c-text:         #1e1b4b;
+  --c-muted:        #6b6b9a;
+  --c-input-bg:     #ffffff;
+  --c-input-border: rgba(120,100,220,0.25);
+  --sidebar-bg:     #fafafffe;
+  --navbar-bg:      #f5f5fffa;
+  --dropdown-bg:    #ffffff;
+  --c-accent:       #6d28d9;
+  --c-accent2:      #0891b2;
+  --c-card-hover:   rgba(109,40,217,0.04);
+}
+
+/* ══════════════════════════════════════════════════════════
+   GLOBAL RESET & BASE
+══════════════════════════════════════════════════════════ */
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+
+body {
+  font-family: 'Nunito', sans-serif;
+  background-color: var(--c-bg);
+  color: var(--c-text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ══════════════════════════════════════════════════════════
+   SCROLLBAR
+══════════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #7c3aed60; border-radius:999px; }
+::-webkit-scrollbar-thumb:hover { background: #06b6d480; }
+[data-theme='light'] ::-webkit-scrollbar-thumb { background: rgba(109,40,217,0.3); }
+
+/* ══════════════════════════════════════════════════════════
+   GLASS
+══════════════════════════════════════════════════════════ */
+.glass {
+  background: var(--c-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--c-border);
+}
+.glass-strong {
+  background: var(--c-surface2);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--c-border);
+}
+
+/* ══════════════════════════════════════════════════════════
+   LIGHT MODE — Inline dark-color overrides
+   These catch hardcoded inline styles from components
+══════════════════════════════════════════════════════════ */
+/* Dark background hex overrides */
+[data-theme='light'] [style*="background: rgb(14, 14, 34)"],
+[data-theme='light'] [style*="background: #0e0e22"],
+[data-theme='light'] [style*="background: #0d0d20"],
+[data-theme='light'] [style*="background: rgba(10,10,26"],
+[data-theme='light'] [style*="background: rgba(5,5,16"],
+[data-theme='light'] [style*="background: #0a0a1"],
+[data-theme='light'] [style*="background: #050508"],
+[data-theme='light'] [style*="background: #0f0f1a"] {
+  background: var(--c-surface) !important;
+}
+[data-theme='light'] [style*="background: #07070f"],
+[data-theme='light'] [style*="background: #050508"],
+[data-theme='light'] [style*="background: rgba(5,5,8"] {
+  background: #f0f0fc !important;
+}
+[data-theme='light'] [style*="background: #070712"],
+[data-theme='light'] [style*="background: rgba(7,7,18"] {
+  background: var(--navbar-bg) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   LIGHT MODE — Text overrides
+══════════════════════════════════════════════════════════ */
+[data-theme='light'] .text-slate-300 { color: #3a3a5a !important; }
+[data-theme='light'] .text-slate-400 { color: #4a4a7a !important; }
+[data-theme='light'] .text-slate-500 { color: #6b6b9a !important; }
+[data-theme='light'] .text-slate-600 { color: #8080a8 !important; }
+[data-theme='light'] .text-white     { color: #1e1b4b !important; }
+
+/* ══════════════════════════════════════════════════════════
+   LIGHT MODE — Background overrides
+══════════════════════════════════════════════════════════ */
+[data-theme='light'] .bg-white\/5,
+[data-theme='light'] .bg-white\/\[0\.05\],
+[data-theme='light'] .bg-white\/\[0\.06\] { background: rgba(109,40,217,0.05) !important; }
+[data-theme='light'] .bg-white\/\[0\.09\],
+[data-theme='light'] .bg-white\/10        { background: rgba(109,40,217,0.08) !important; }
+[data-theme='light'] .bg-black\/60        { background: rgba(30,27,75,0.6) !important; }
+[data-theme='light'] .bg-black\/70        { background: rgba(30,27,75,0.7) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   LIGHT MODE — Border overrides
+══════════════════════════════════════════════════════════ */
+[data-theme='light'] .border-white\/8,
+[data-theme='light'] .border-white\/\[0\.08\],
+[data-theme='light'] .border-white\/10,
+[data-theme='light'] .border-white\/\[0\.10\],
+[data-theme='light'] .border-white\/\[0\.12\] { border-color: rgba(109,40,217,0.12) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   LIGHT MODE — Hover overrides
+══════════════════════════════════════════════════════════ */
+[data-theme='light'] .hover\:bg-white\/5:hover     { background: rgba(109,40,217,0.06) !important; }
+[data-theme='light'] .hover\:bg-white\/\[0\.06\]:hover { background: rgba(109,40,217,0.07) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   LIGHT MODE — Card & panel shadows
+══════════════════════════════════════════════════════════ */
+[data-theme='light'] .shadow-2xl {
+  box-shadow: 0 24px 64px rgba(109,40,217,0.12), 0 4px 16px rgba(0,0,0,0.06) !important;
+}
+[data-theme='light'] .shadow-lg {
+  box-shadow: 0 8px 24px rgba(109,40,217,0.10), 0 2px 8px rgba(0,0,0,0.04) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   LIGHT MODE — Navbar & sidebar refinement
+══════════════════════════════════════════════════════════ */
+[data-theme='light'] nav,
+[data-theme='light'] aside {
+  box-shadow: 2px 0 12px rgba(109,40,217,0.06) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   GRADIENT TEXT
+══════════════════════════════════════════════════════════ */
+.gradient-text {
+  background: linear-gradient(135deg, #7c3aed, #06b6d4, #f472b6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.gradient-text-gold {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24, #f97316);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+[data-theme='light'] .gradient-text {
+  background: linear-gradient(135deg, #6d28d9, #0891b2, #be185d);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ══════════════════════════════════════════════════════════
+   STARS
+══════════════════════════════════════════════════════════ */
+.stars { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0; overflow:hidden; }
+.star  { position:absolute; border-radius:50%; background:white; animation: twinkle var(--duration,3s) ease-in-out infinite; animation-delay:var(--delay,0s); }
+[data-theme='light'] .star { background: #7c3aed; opacity: 0.1; }
+
+/* ══════════════════════════════════════════════════════════
+   NOTE COLOR BARS
+══════════════════════════════════════════════════════════ */
+.note-color-violet { border-left:3px solid #7c3aed; }
+.note-color-cyan   { border-left:3px solid #06b6d4; }
+.note-color-pink   { border-left:3px solid #f472b6; }
+.note-color-amber  { border-left:3px solid #f59e0b; }
+.note-color-teal   { border-left:3px solid #2dd4bf; }
+.note-color-blue   { border-left:3px solid #60a5fa; }
+
+/* ══════════════════════════════════════════════════════════
+   INPUT
+══════════════════════════════════════════════════════════ */
+.saturn-input {
+  @apply w-full rounded-xl px-4 py-3 text-sm font-nunito;
+  @apply focus:outline-none transition-all duration-200;
+  background: var(--c-input-bg);
+  border: 1px solid var(--c-input-border);
+  color: var(--c-text);
+}
+.saturn-input::placeholder { color: var(--c-muted); opacity: 0.7; }
+.saturn-input:focus {
+  border-color: rgba(124,58,237,0.5);
+  background: var(--c-surface);
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.10);
+}
+[data-theme='light'] .saturn-input {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+[data-theme='light'] .saturn-input:focus {
+  border-color: rgba(109,40,217,0.4);
+  box-shadow: 0 0 0 3px rgba(109,40,217,0.08);
+}
+
+/* ══════════════════════════════════════════════════════════
+   BUTTONS
+══════════════════════════════════════════════════════════ */
+.btn-primary {
+  @apply flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-white;
+  @apply bg-gradient-to-r from-violet-600 to-cyan-600;
+  @apply hover:from-violet-500 hover:to-cyan-500;
+  @apply transition-all duration-200 shadow-lg hover:shadow-violet-500/25;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+}
+[data-theme='light'] .btn-primary {
+  @apply from-violet-700 to-cyan-700 hover:from-violet-600 hover:to-cyan-600;
+  box-shadow: 0 4px 12px rgba(109,40,217,0.25);
+}
+.btn-secondary {
+  @apply flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  color: var(--c-text);
+  @apply hover:opacity-80 transition-all duration-200;
+}
+[data-theme='light'] .btn-secondary {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.btn-danger {
+  @apply flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm;
+  @apply bg-red-600/20 border border-red-500/30 text-red-400;
+  @apply hover:bg-red-600/30 hover:text-red-300 transition-all duration-200;
+}
+[data-theme='light'] .btn-danger {
+  @apply bg-red-50 border-red-200 text-red-600;
+  @apply hover:bg-red-100 hover:text-red-700;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PROGRESS / TOAST
+══════════════════════════════════════════════════════════ */
+.progress-bar  { @apply h-2 rounded-full overflow-hidden; background: var(--c-surface2); }
+.progress-fill { @apply h-full rounded-full bg-gradient-to-r from-violet-600 to-cyan-500 transition-all duration-300; }
+.toast-container { position:fixed; top:1.5rem; right:1.5rem; z-index:9999; display:flex; flex-direction:column; gap:.75rem; }
+
+/* ══════════════════════════════════════════════════════════
+   ANIMATIONS
+══════════════════════════════════════════════════════════ */
+@keyframes twinkle { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.2;transform:scale(.5)} }
+@keyframes float   { 0%,100%{transform:translateY(0)rotate(0)} 33%{transform:translateY(-15px)rotate(2deg)} 66%{transform:translateY(-8px)rotate(-1deg)} }
+@keyframes orbit   { from{transform:rotate(0deg) translateX(80px) rotate(0deg)} to{transform:rotate(360deg) translateX(80px) rotate(-360deg)} }
+@keyframes fadeInUp{ from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+@keyframes scaleIn { from{transform:scale(.94);opacity:0} to{transform:scale(1);opacity:1} }
+@keyframes slideInRight { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+.animate-fadeInUp    { animation: fadeInUp    0.4s ease-out forwards; }
+.animate-scaleIn     { animation: scaleIn     0.25s ease-out forwards; }
+.animate-slideInRight{ animation: slideInRight 0.3s ease-out forwards; }
+.animate-float       { animation: float 6s ease-in-out infinite; }
