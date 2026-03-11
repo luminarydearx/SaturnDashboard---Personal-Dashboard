@@ -52,6 +52,8 @@ function buildBackupEntries() {
 }
 
 // ── GET — download zip to browser ──────────────────────────────────────────
+// ── GET — download zip to browser ──────────────────────────────────────────
+// ── GET — download zip to browser ──────────────────────────────────────────
 export async function GET() {
   const session = await getSession();
 
@@ -69,8 +71,11 @@ export async function GET() {
   const ts = timestamp();
   const fname = `saturn-backup-${ts}.zip`;
 
-  // FIX: Buffer → Blob agar kompatibel dengan NextResponse BodyInit
+  // ── FIX: Buffer → Blob dengan type assertion untuk TypeScript strict mode ──
+  // Di runtime, Node.js Buffer kompatibel dengan BlobPart
+  // @ts-expect-error - Buffer is compatible with BlobPart at runtime
   const body = new Blob([zipBuf]);
+  // ──────────────────────────────────────────────────────────────────────────
 
   // Register backup entry
   addBackupEntry({
