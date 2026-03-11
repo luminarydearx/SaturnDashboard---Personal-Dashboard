@@ -236,7 +236,7 @@ export default function BackupStatus({ autoTrigger = true }: Props) {
                 <button onClick={handleFull} disabled={isRunning}
                   className="w-full flex items-center gap-3 p-3 rounded-xl transition-all group disabled:opacity-50 relative overflow-hidden"
                   style={{ background: "linear-gradient(135deg, rgba(124,58,237,0.2), rgba(6,182,212,0.1))", border: "1px solid rgba(124,58,237,0.3)" }}>
-                  {isRunning === "full"
+                  {running === "full"
                     ? <MdRefresh size={18} className="text-violet-400 animate-spin" />
                     : <MdBackup size={18} className="text-violet-400" />}
                   <div className="flex-1 text-left">
