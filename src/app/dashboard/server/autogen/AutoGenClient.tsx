@@ -14,15 +14,21 @@ import { SiGithub } from 'react-icons/si';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ── Constants ─────────────────────────────────────────────────────────────
-const AUTOGEN_URL = 'https://auto-generator-app.vercel.app';
-const AUTOGEN_GITHUB = 'https://github.com/luminarydearx/AutoGenerator-App';
+const AUTOGEN_URL = 'https://saturn-dashboard-yourname.vercel.app'; // Ganti dengan URL Anda
+const AUTOGEN_GITHUB = 'https://github.com/luminarydearx/SaturnDashboard---Personal-Dashboard';
 const AUTOGEN_REPO_OWNER = 'luminarydearx';
-const AUTOGEN_REPO_NAME  = 'AutoGenerator-App';
+const AUTOGEN_REPO_NAME  = 'SaturnDashboard---Personal-Dashboard';
+const GITHUB_TOKEN       = process.env.NEXT_PUBLIC_GITHUB_TOKEN || '';
+const FALLBACK_BRANCH    = 'main';
+
+// ── AutoGen Project Path ──────────────────────────────────────────────────
+const AUTOGEN_PROJECT_PATH = 'project/AutoGen';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 interface FileNode {
   name: string;
   path: string;
+  relativePath: string;
   type: 'file' | 'dir';
   content?: string;
   children?: FileNode[];
@@ -39,9 +45,8 @@ function getLang(filename: string): string {
   return map[ext] || 'text';
 }
 
-// ── Syntax highlighter (FIXED LOGIC) ──────────────────────────────────────
+// ── Syntax highlighter ────────────────────────────────────────────────────
 function highlight(code: string, lang: string): string {
-  // 1. Lakukan highlighting DULU saat kode masih mentah (belum di-escape)
   let c = code;
   
   if (lang === 'json') {
@@ -69,9 +74,7 @@ function highlight(code: string, lang: string): string {
       .replace(/(<\/?)([\w-]+)/g, '$1<span class="hl-kw">$2</span>')
       .replace(/([\w-]+)(=)("(?:[^"\\]|\\.)*")/g, '<span class="hl-prop">$1</span>$2<span class="hl-str">$3</span>');
   }
-
-  // 2. Baru lakukan ESCAPE karakter khusus HTML (< > &) SETELAH highlighting selesai
-  // Ini mencegah tag span kita rusak atau ter-double escape
+  
   c = c.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   
   return c;
@@ -113,7 +116,7 @@ function TreeNode({ node, onSelect, selected, depth = 0 }: {
         color: isActive ? 'var(--c-accent)' : 'var(--c-muted)',
       }}>
       <MdInsertDriveFile size={12} className="flex-shrink-0" />
-      <span className="truncate">{node.name}</span>
+      <span className="truncate" title={node.relativePath}>{node.name}</span>
     </button>
   );
 }
@@ -158,7 +161,9 @@ function CodePane({ file, onChange, readOnly }: {
       <div className="flex items-center gap-2 px-4 py-2 border-b flex-shrink-0"
         style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface)' }}>
         <MdInsertDriveFile size={14} style={{ color: 'var(--c-accent)' }} />
-        <span className="text-[var(--c-text)] text-xs font-mono flex-1 truncate">{file.path}</span>
+        <span className="text-[var(--c-text)] text-xs font-mono flex-1 truncate" title={file.relativePath}>
+          {file.relativePath}
+        </span>
         <span className="text-[var(--c-muted)] text-[10px] font-mono uppercase">{lang}</span>
         <span className="text-[var(--c-muted)] text-[10px]">{lines.length} lines</span>
       </div>
@@ -231,23 +236,40 @@ export default function AutoGenClient({ user }: Props) {
   const [treeLoading,     setTreeLoading]     = useState(false);
   const [pushing,         setPushing]         = useState(false);
   const [pushStatus,      setPushStatus]      = useState<string>('');
-  // ── NEW: Auto-detect default branch ─────────────────────────────────────
   const [defaultBranch,   setDefaultBranch]   = useState<string>('');
   const [branchLoading,   setBranchLoading]   = useState(true);
+  
   const { success, error: toastErr, info } = useToast();
 
   // Fetch default branch from GitHub API
   const fetchDefaultBranch = useCallback(async () => {
     try {
-      const res = await fetch(`https://api.github.com/repos/${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}`);
+      const headers: HeadersInit = { 'Accept': 'application/vnd.github.v3+json' };
+      if (GITHUB_TOKEN) {
+        headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
+      }
+
+      const res = await fetch(`https://api.github.com/repos/${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}`, {
+        headers
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        console.error('Failed to fetch repo info:', errData);
+        throw new Error(errData.message || 'Repo not found');
+      }
+
       const data = await res.json();
       if (data?.default_branch) {
         setDefaultBranch(data.default_branch);
+        console.log('✅ Detected default branch:', data.default_branch);
       } else {
-        setDefaultBranch('main');
+        setDefaultBranch(FALLBACK_BRANCH);
       }
-    } catch {
-      setDefaultBranch('main');
+    } catch (err: any) {
+      console.error('Error detecting branch:', err);
+      toastErr(`Failed to detect branch: ${err.message}`);
+      setDefaultBranch(FALLBACK_BRANCH);
     } finally {
       setBranchLoading(false);
     }
@@ -268,27 +290,78 @@ export default function AutoGenClient({ user }: Props) {
     
     setTreeLoading(true);
     try {
-      const res = await fetch(`https://api.github.com/repos/${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}/git/trees/${defaultBranch}?recursive=1`, {
-        headers: { 'Accept': 'application/vnd.github.v3+json' }
-      });
+      const headers: HeadersInit = { 'Accept': 'application/vnd.github.v3+json' };
+      if (GITHUB_TOKEN) {
+        headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
+      }
+
+      const res = await fetch(
+        `https://api.github.com/repos/${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}/git/trees/${defaultBranch}?recursive=1`,
+        { headers }
+      );
+      
       const data = await res.json();
-      if (!data.tree) { toastErr('Failed to load repo tree'); return; }
+      
+      if (!res.ok) {
+        console.error('GitHub API Error:', data);
+        toastErr(`Failed to load tree: ${data.message || 'Unknown error'}`);
+        return;
+      }
+
+      if (!data.tree) { 
+        toastErr('Invalid response from GitHub'); 
+        return; 
+      }
+
+      // ── DEBUG: Log semua path yang ada ───────────────────────────────
+      console.log('📁 Total items from GitHub:', data.tree.length);
+      console.log('🔍 Looking for path:', AUTOGEN_PROJECT_PATH);
+      
+      // Cari path yang mengandung "AutoGen" atau "project"
+      const autoGenPaths = data.tree
+        .filter((item: any) => 
+          item.path.includes('AutoGen') || item.path.includes('project')
+        )
+        .map((item: any) => item.path)
+        .slice(0, 20);
+      
+      console.log('🎯 Paths yang mengandung AutoGen/project:', autoGenPaths);
+      // ─────────────────────────────────────────────────────────────────
 
       const root: Record<string, FileNode> = {};
       const tree: FileNode[] = [];
 
       for (const item of data.tree) {
         const parts = item.path.split('/');
-        if (parts.some((p: string) => p === 'node_modules' || p === '.git')) continue;
+        
+        // Skip folder yang tidak relevan
+        if (parts.some((p: string) => 
+          p === 'node_modules' || p === '.git' || p === '.vercel' || 
+          p === '.next' || p === 'dist' || p === 'build' || p === '.vscode'
+        )) continue;
+        
         if (item.type === 'blob') {
-          const node: FileNode = { name: parts[parts.length - 1], path: item.path, type: 'file', content: '' };
+          const node: FileNode = { 
+            name: parts[parts.length - 1], 
+            path: item.path, 
+            relativePath: item.path,
+            type: 'file', 
+            content: '' 
+          };
           root[item.path] = node;
         } else if (item.type === 'tree') {
-          const node: FileNode = { name: parts[parts.length - 1], path: item.path, type: 'dir', children: [] };
+          const node: FileNode = { 
+            name: parts[parts.length - 1], 
+            path: item.path, 
+            relativePath: item.path,
+            type: 'dir', 
+            children: [] 
+          };
           root[item.path] = node;
         }
       }
 
+      // Build parent-child relationships
       for (const [path, node] of Object.entries(root)) {
         const parts = path.split('/');
         if (parts.length === 1) { tree.push(node); continue; }
@@ -301,13 +374,67 @@ export default function AutoGenClient({ user }: Props) {
         }
       }
 
-      setFileTree(tree.sort((a, b) => {
+      // ── IMPROVED FILTER: Lebih fleksibel ─────────────────────────────
+      const possiblePaths = [
+        AUTOGEN_PROJECT_PATH,
+        'project/AutoGen',
+        'project/autogen',
+        'AutoGen',
+        'autogen',
+        'src',
+        'app'
+      ];
+      
+      let filteredTree: FileNode[] = [];
+      
+      for (const targetPath of possiblePaths) {
+        const found = tree.filter(node => {
+          if (node.path === targetPath) return true;
+          if (node.path.startsWith(targetPath + '/')) return true;
+          return false;
+        });
+        
+        if (found.length > 0) {
+          console.log(`✅ Found files in path: "${targetPath}" (${found.length} items)`);
+          
+          // Buat relative path
+          filteredTree = found.map(node => {
+            const relativePath = node.path.replace(targetPath + '/', '');
+            return {
+              ...node,
+              relativePath: relativePath || node.name,
+              children: node.children ? node.children.map(child => ({
+                ...child,
+                relativePath: child.path.replace(targetPath + '/', '')
+              })) : undefined
+            };
+          });
+          
+          setFileTree(filteredTree.sort((a, b) => {
+            if (a.type === b.type) return a.name.localeCompare(b.name);
+            return a.type === 'dir' ? -1 : 1;
+          }));
+          
+          console.log('✅ AutoGen file tree loaded:', filteredTree.length, 'items');
+          info(`Loaded ${filteredTree.length} files from ${targetPath}`);
+          setTreeLoading(false);
+          return;
+        }
+      }
+      
+      // ── FALLBACK: Jika tidak ada yang cocok, tampilkan root ──────────
+      console.warn('⚠️ No matching path found. Showing root directory.');
+      setFileTree(tree.slice(0, 50).sort((a, b) => {
         if (a.type === b.type) return a.name.localeCompare(b.name);
         return a.type === 'dir' ? -1 : 1;
       }));
-      info('File tree loaded from GitHub');
-    } catch { toastErr('Failed to fetch file tree'); }
-    finally { setTreeLoading(false); }
+      info('Showing root directory (AutoGen path not found)');
+    } catch (err) { 
+      console.error('Failed to fetch file tree:', err);
+      toastErr('Failed to fetch file tree'); 
+    } finally { 
+      setTreeLoading(false); 
+    }
   }, [defaultBranch, branchLoading]);
 
   useEffect(() => {
@@ -317,7 +444,7 @@ export default function AutoGenClient({ user }: Props) {
   }, [tab, loadTree, branchLoading, defaultBranch]);
 
   const loadFileContent = async (node: FileNode) => {
-    if (!defaultBranch) return;
+    if (!defaultBranch || node.type === 'dir') return;
     
     if (node.content !== '' && node.content !== undefined) {
       setSelectedFile(node);
@@ -325,15 +452,27 @@ export default function AutoGenClient({ user }: Props) {
       return;
     }
     try {
+      const headers: HeadersInit = {};
+      if (GITHUB_TOKEN) {
+        headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
+      }
+
       const res = await fetch(
-        `https://raw.githubusercontent.com/${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}/${defaultBranch}/${node.path}`
+        `https://raw.githubusercontent.com/${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}/${defaultBranch}/${node.path}`,
+        { headers }
       );
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
       const text = await res.text();
       const updated = { ...node, content: text };
       setSelectedFile(updated);
       setEditedContent(text);
       setFileTree(prev => updateNodeContent(prev, node.path, text));
-    } catch { toastErr('Failed to load file'); }
+    } catch (err) { 
+      console.error('Failed to load file:', err);
+      toastErr('Failed to load file'); 
+    }
   };
 
   function updateNodeContent(nodes: FileNode[], path: string, content: string): FileNode[] {
@@ -344,6 +483,7 @@ export default function AutoGenClient({ user }: Props) {
     });
   }
 
+  // Push to GitHub via API route
   const pushToGitHub = async (files: { path: string; content: string }[], message: string) => {
     if (!defaultBranch) {
       toastErr('Branch not detected yet. Please wait...');
@@ -371,9 +511,13 @@ export default function AutoGenClient({ user }: Props) {
         throw new Error(d.error || 'Push failed');
       }
     } catch (err: any) {
+      console.error('Push error:', err);
       toastErr(err.message);
       setPushStatus('Push failed');
-    } finally { setPushing(false); setTimeout(() => setPushStatus(''), 4000); }
+    } finally { 
+      setPushing(false); 
+      setTimeout(() => setPushStatus(''), 4000); 
+    }
   };
 
   const handleLockdown = async () => {
@@ -385,12 +529,21 @@ export default function AutoGenClient({ user }: Props) {
     setShowLockConfirm(false);
     setLockdownLoading(true);
     try {
-      const lockdownData = JSON.stringify({ active: true, reason: lockdownReason, timestamp: new Date().toISOString() }, null, 2);
+      const lockdownData = JSON.stringify({ 
+        active: true, 
+        reason: lockdownReason, 
+        timestamp: new Date().toISOString() 
+      }, null, 2);
+
       await pushToGitHub([
         { path: 'public/lockdown.json', content: lockdownData },
       ], `🔒 Saturn Dashboard: Lockdown Mode activated — ${lockdownReason || 'No reason given'}`);
       setLockdownActive(true);
-    } finally { setLockdownLoading(false); }
+    } catch (err: any) {
+      toastErr(err.message);
+    } finally { 
+      setLockdownLoading(false); 
+    }
   };
 
   const handleUnlockdown = async () => {
@@ -402,13 +555,22 @@ export default function AutoGenClient({ user }: Props) {
     setShowUnlockConfirm(false);
     setLockdownLoading(true);
     try {
-      const unlockData = JSON.stringify({ active: false, reason: '', timestamp: new Date().toISOString() }, null, 2);
+      const unlockData = JSON.stringify({ 
+        active: false, 
+        reason: '', 
+        timestamp: new Date().toISOString() 
+      }, null, 2);
+      
       await pushToGitHub([
         { path: 'public/lockdown.json', content: unlockData },
       ], `🔓 Saturn Dashboard: Lockdown Mode deactivated`);
       setLockdownActive(false);
       setLockdownReason('');
-    } finally { setLockdownLoading(false); }
+    } catch (err: any) {
+      toastErr(err.message);
+    } finally { 
+      setLockdownLoading(false); 
+    }
   };
 
   const handleSaveFile = async () => {
@@ -417,15 +579,17 @@ export default function AutoGenClient({ user }: Props) {
     try {
       await pushToGitHub([
         { path: selectedFile.path, content: editedContent }
-      ], `✏️ Saturn Dashboard: Edit ${selectedFile.path}`);
+      ], `✏️ AutoGen: Edit ${selectedFile.relativePath}`);
       setFileTree(prev => updateNodeContent(prev, selectedFile.path, editedContent));
       setSelectedFile({ ...selectedFile, content: editedContent });
-    } finally { setSaveLoading(false); }
+    } finally { 
+      setSaveLoading(false); 
+    }
   };
 
   return (
     <div className="h-full flex flex-col" style={{ minHeight: '80vh' }}>
-      {/* ── Header ── */}
+      {/* ── Header ─ */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 flex-shrink-0">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
@@ -433,13 +597,18 @@ export default function AutoGenClient({ user }: Props) {
             <MdCode size={24} style={{ color: 'var(--c-accent)' }} />
           </div>
           <div>
-            <h1 className="font-orbitron text-2xl font-bold text-[var(--c-text)]">AutoGen</h1>
+            <h1 className="font-orbitron text-2xl font-bold text-[var(--c-text)]">AutoGen Editor</h1>
             <p className="text-[var(--c-muted)] text-sm">
-              <a href={AUTOGEN_URL} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: 'var(--c-accent)' }}>{AUTOGEN_URL}</a>
+              <span className="text-[var(--c-accent)]">project/AutoGen</span>
+              <span className="mx-2">•</span>
+              <a href={AUTOGEN_URL} target="_blank" rel="noreferrer" className="hover:underline">
+                {AUTOGEN_URL.replace('https://', '')}
+              </a>
             </p>
           </div>
         </div>
 
+        {/* Status + Lockdown */}
         <div className="flex items-center gap-3 flex-wrap">
           {pushStatus && (
             <span className="text-xs px-3 py-1.5 rounded-full font-mono" style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)', color: 'var(--c-muted)' }}>
@@ -511,25 +680,25 @@ export default function AutoGenClient({ user }: Props) {
               style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface2)' }}>
               <div className="flex items-center gap-1.5 flex-1 px-3 py-1.5 rounded-lg text-xs font-mono text-[var(--c-muted)]"
                 style={{ background: 'var(--c-bg)', border: '1px solid var(--c-border)' }}>
-                <MdOpenInNew size={12} /> {AUTOGEN_URL}
+                <MdOpenInNew size={12} /> {AUTOGEN_URL.replace('https://', '')}
               </div>
               <button onClick={() => { setShowIframe(true); setIframeKey(p => p+1); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all btn-primary">
                 <MdPlayArrow size={14} /> Preview
               </button>
               {showIframe && (
-                <button onClick={() => setIframeKey(p => p+1)}
-                  className="p-2 rounded-xl text-[var(--c-muted)] hover:text-[var(--c-text)] transition-colors"
-                  style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)' }}>
-                  <MdRefresh size={15} />
-                </button>
-              )}
-              {showIframe && (
-                <button onClick={() => setShowIframe(false)}
-                  className="p-2 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors"
-                  style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
-                  <MdStop size={15} />
-                </button>
+                <>
+                  <button onClick={() => setIframeKey(p => p+1)}
+                    className="p-2 rounded-xl text-[var(--c-muted)] hover:text-[var(--c-text)] transition-colors"
+                    style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)' }}>
+                    <MdRefresh size={15} />
+                  </button>
+                  <button onClick={() => setShowIframe(false)}
+                    className="p-2 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors"
+                    style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
+                    <MdStop size={15} />
+                  </button>
+                </>
               )}
             </div>
             {showIframe ? (
@@ -549,8 +718,8 @@ export default function AutoGenClient({ user }: Props) {
                 </div>
                 <div className="text-center">
                   <p className="font-orbitron text-lg font-bold text-[var(--c-text)] mb-2">Live Preview</p>
-                  <p className="text-[var(--c-muted)] text-sm">Click Preview to load the AutoGen website in realtime</p>
-                  <p className="text-[var(--c-muted)] text-xs mt-1 font-mono">{AUTOGEN_URL}</p>
+                  <p className="text-[var(--c-muted)] text-sm">Preview your AutoGen project in realtime</p>
+                  <p className="text-[var(--c-muted)] text-xs mt-1 font-mono">{AUTOGEN_URL.replace('https://', '')}</p>
                 </div>
                 <button onClick={() => { setShowIframe(true); setIframeKey(p => p+1); }} className="btn-primary">
                   <MdPlayArrow size={18} /> Load Preview
@@ -566,26 +735,27 @@ export default function AutoGenClient({ user }: Props) {
             className="flex-1 rounded-2xl overflow-hidden flex flex-col sm:flex-row"
             style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)', minHeight: 600 }}>
             
-            {/* File tree sidebar - FIXED HEIGHT */}
+            {/* File tree sidebar */}
             <div className="w-full sm:w-56 border-b sm:border-b-0 sm:border-r flex flex-col flex-shrink-0"
               style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface2)', height: '100%', maxHeight: 'none' }}>
               <div className="flex items-center gap-2 px-3 py-2.5 border-b flex-shrink-0" style={{ borderColor: 'var(--c-border)' }}>
                 <MdFolderOpen size={14} style={{ color: 'var(--c-accent)' }} />
-                <span className="text-[var(--c-text)] text-xs font-semibold flex-1">AutoGen</span>
+                <span className="text-[var(--c-text)] text-xs font-semibold flex-1 truncate" title="project/AutoGen">
+                  AutoGen
+                </span>
                 <button onClick={loadTree} disabled={treeLoading || branchLoading} className="p-1 rounded hover:bg-white/5 transition-colors">
                   <MdRefresh size={13} className={`text-[var(--c-muted)] ${treeLoading || branchLoading ? 'animate-spin' : ''}`} />
                 </button>
               </div>
-              {/* Flex-1 ensures it fills remaining space */}
               <div className="overflow-y-auto flex-1 py-1 px-1">
                 {branchLoading ? (
                   <p className="text-[var(--c-muted)] text-xs text-center py-6">Detecting branch...</p>
                 ) : treeLoading ? (
-                  [...Array(6)].map((_, i) => (
+                  [...Array(8)].map((_, i) => (
                     <div key={i} className="h-5 rounded mb-1 animate-pulse" style={{ background: 'var(--c-border)', margin: '4px 8px' }} />
                   ))
                 ) : fileTree.length === 0 ? (
-                  <p className="text-[var(--c-muted)] text-xs text-center py-6">No files loaded</p>
+                  <p className="text-[var(--c-muted)] text-xs text-center py-6">No files in project/AutoGen</p>
                 ) : fileTree.map(n => (
                   <TreeNode key={n.path} node={n} onSelect={loadFileContent} selected={selectedFile?.path || ''} />
                 ))}
@@ -597,7 +767,9 @@ export default function AutoGenClient({ user }: Props) {
               {tab === 'editor' && selectedFile && (
                 <div className="flex items-center justify-end gap-2 px-4 py-2 border-b flex-shrink-0"
                   style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface)' }}>
-                  <span className="text-[var(--c-muted)] text-xs flex-1">Edit & push to GitHub</span>
+                  <span className="text-[var(--c-muted)] text-xs flex-1 truncate" title={selectedFile.relativePath}>
+                    Edit & push to GitHub
+                  </span>
                   <button onClick={handleSaveFile} disabled={saveLoading || pushing || !defaultBranch}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold btn-primary">
                     {saveLoading || pushing
@@ -624,7 +796,7 @@ export default function AutoGenClient({ user }: Props) {
               </div>
               <h3 className="text-xl font-bold text-[var(--c-text)] text-center mb-2">Activate Lockdown Mode?</h3>
               <p className="text-sm text-[var(--c-muted)] text-center mb-4 font-nunito">
-                The AutoGen website will show a lockdown screen to all visitors. This will push to GitHub and trigger a Vercel deployment.
+                Your AutoGen website will show a lockdown screen to all visitors. This will push to GitHub and trigger a Vercel deployment.
               </p>
               <div>
                 <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-2">Lockdown Reason (shown to visitors)</label>
@@ -650,7 +822,7 @@ export default function AutoGenClient({ user }: Props) {
 
       <ConfirmModal isOpen={showUnlockConfirm}
         title="Deactivate Lockdown Mode?"
-        message="AutoGen will become accessible again for all visitors. This will push to GitHub."
+        message="Your AutoGen website will become accessible again for all visitors. This will push to GitHub."
         type="success" confirmText="Unlock Site" cancelText="Cancel"
         onConfirm={handleUnlockdown} onCancel={() => setShowUnlockConfirm(false)} isLoading={lockdownLoading} />
     </div>
