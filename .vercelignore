@@ -3,4 +3,5 @@ node_modules
 electron
 dist-electron
 *.zip
+data/
 .env.local

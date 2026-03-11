@@ -55,7 +55,8 @@ export async function POST(req: NextRequest) {
 
     // Ambil token
     const settings = getSettings();
-    const githubToken = token || settings.githubToken || process.env.GITHUB_TOKEN;
+    // Env var takes priority (always available on Vercel), fallback to DB settings
+    const githubToken = process.env.GITHUB_TOKEN || settings.githubToken || token;
     
     if (!githubToken) {
       console.error('[GitHub Push API] No GitHub token configured');

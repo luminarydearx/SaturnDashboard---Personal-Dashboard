@@ -15,23 +15,18 @@ function ensureDataDir() {
 
 function readJson<T>(filename: string, defaultValue: T): T {
   ensureDataDir();
-
   const filePath = path.join(DATA_DIR, filename);
-
   if (!fs.existsSync(filePath)) {
-
+    // On Vercel: copy from bundled data/ (cwd) so token/settings are preserved
     const initialPath = path.join(process.cwd(), 'data', filename);
-
     if (fs.existsSync(initialPath)) {
       const initialData = fs.readFileSync(initialPath, 'utf-8');
       fs.writeFileSync(filePath, initialData);
-      return JSON.parse(initialData);
+      return JSON.parse(initialData) as T;
     }
-
     fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
     return defaultValue;
   }
-
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
   } catch {
@@ -110,25 +105,26 @@ export function purgeDoneNotes(): number {
 
 // ── Settings ─────────────────────────────────────────────────────────────
 export interface AutogenSchedule {
-  lockdownEnabled: boolean;
-  lockdownAt: string;       // ISO datetime
-  lockdownReason: string;
-  lockdownMediaUrl: string; // optional Cloudinary URL
-  unlockEnabled: boolean;
-  unlockAt: string;         // ISO datetime
+  lockdownEnabled:   boolean;
+  lockdownAt:        string;   // ISO datetime
+  lockdownReason:    string;
+  lockdownMediaUrl:  string;   // Cloudinary URL (optional)
+  unlockEnabled:     boolean;
+  unlockAt:          string;   // ISO datetime
 }
 
 export interface Settings {
-  githubToken: string;
-  githubRepo: string;
-  githubOwner: string;
-  lastPush: string;
-  autogenSchedule?: AutogenSchedule;
+  githubToken:       string;
+  githubRepo:        string;
+  githubOwner:       string;
+  lastPush:          string;
+  autogenSchedule?:  AutogenSchedule;
 }
 
 const DEFAULT_SCHEDULE: AutogenSchedule = {
-  lockdownEnabled: false, lockdownAt: '', lockdownReason: '', lockdownMediaUrl: '',
-  unlockEnabled: false, unlockAt: '',
+  lockdownEnabled: false, lockdownAt: '',
+  lockdownReason: '',     lockdownMediaUrl: '',
+  unlockEnabled: false,   unlockAt: '',
 };
 
 export function getSettings(): Settings {
@@ -140,7 +136,7 @@ export function saveSettings(settings: Settings): void {
   writeJson('settings.json', settings);
 }
 export function getAutogenSchedule(): AutogenSchedule {
-  return getSettings().autogenSchedule ?? DEFAULT_SCHEDULE;
+  return getSettings().autogenSchedule ?? { ...DEFAULT_SCHEDULE };
 }
 export function saveAutogenSchedule(schedule: AutogenSchedule): void {
   saveSettings({ ...getSettings(), autogenSchedule: schedule });

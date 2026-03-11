@@ -56,12 +56,7 @@ function GearRings() {
   );
 }
 
-// Detect if URL is a video
-function isVideoUrl(url) {
-  return /\.(mp4|webm|mov|avi|ogg)(\?|$)/i.test(url);
-}
-
-export default function LockdownScreen({ reason, mediaUrl }) {
+export default function LockdownScreen({ reason }) {
   const [glitch, setGlitch] = useState(false);
   useEffect(() => {
     const t = setInterval(() => { setGlitch(true); setTimeout(() => setGlitch(false), 120); }, 4000 + Math.random() * 3000);
@@ -78,14 +73,14 @@ export default function LockdownScreen({ reason, mediaUrl }) {
       <ParticleField />
       {/* Nebula blobs */}
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: "20%", left: "20%", width: 400, height: 400, borderRadius: "50%", background: "rgba(249,115,22,0.06)", filter: "blur(80px)", animation: "pulseAnim 5s ease-in-out infinite" }} />
-        <div style={{ position: "absolute", bottom: "20%", right: "20%", width: 300, height: 300, borderRadius: "50%", background: "rgba(251,191,36,0.05)", filter: "blur(60px)", animation: "pulseAnim 7s ease-in-out infinite", animationDelay: "2s" }} />
+        <div style={{ position: "absolute", top: "20%", left: "20%", width: 400, height: 400, borderRadius: "50%", background: "rgba(249,115,22,0.06)", filter: "blur(80px)", animation: "pulse 5s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", bottom: "20%", right: "20%", width: 300, height: 300, borderRadius: "50%", background: "rgba(251,191,36,0.05)", filter: "blur(60px)", animation: "pulse 7s ease-in-out infinite", animationDelay: "2s" }} />
       </div>
       {/* Scanlines */}
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.2,
         backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,140,0,0.015) 2px, rgba(255,140,0,0.015) 4px)" }} />
 
-      <div style={{ position: "relative", zIndex: 10, width: "100%", maxWidth: 520, margin: "0 auto", padding: "40px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+      <div style={{ position: "relative", zIndex: 10, width: "100%", maxWidth: 480, margin: "0 auto", padding: "40px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
         <GearRings />
 
         <div style={{ textAlign: "center" }}>
@@ -98,8 +93,10 @@ export default function LockdownScreen({ reason, mediaUrl }) {
             fontSize: "clamp(28px, 8vw, 52px)", fontWeight: 900, textTransform: "uppercase",
             letterSpacing: "0.2em", fontFamily: "monospace", color: "#fbbf24",
             textShadow: "0 0 40px rgba(251,191,36,0.7), 0 0 80px rgba(251,191,36,0.4)",
-            transition: "all 0.05s", filter: glitch ? "blur(1px)" : "none",
-            opacity: glitch ? 0.85 : 1, margin: 0,
+            transition: "all 0.05s",
+            filter: glitch ? "blur(1px)" : "none",
+            opacity: glitch ? 0.85 : 1,
+            margin: 0,
           }}>
             LOCKDOWN MODE
           </h1>
@@ -107,28 +104,6 @@ export default function LockdownScreen({ reason, mediaUrl }) {
             TEMPORARILY UNAVAILABLE
           </p>
         </div>
-
-        {/* ── Media (optional) ── */}
-        {mediaUrl && (
-          <div style={{
-            width: "100%", borderRadius: 16, overflow: "hidden",
-            border: "1px solid rgba(251,191,36,0.2)",
-            boxShadow: "0 0 40px rgba(251,191,36,0.1)",
-          }}>
-            {isVideoUrl(mediaUrl) ? (
-              <video
-                src={mediaUrl} autoPlay muted loop playsInline controls
-                style={{ width: "100%", maxHeight: 280, objectFit: "cover", display: "block" }}
-              />
-            ) : (
-              <img
-                src={mediaUrl} alt="Lockdown media"
-                style={{ width: "100%", maxHeight: 280, objectFit: "cover", display: "block" }}
-                onError={e => { e.target.style.display = "none"; }}
-              />
-            )}
-          </div>
-        )}
 
         {/* Info card */}
         <div style={{
@@ -158,7 +133,7 @@ export default function LockdownScreen({ reason, mediaUrl }) {
           AutoGen · Lockdown Control System
         </p>
       </div>
-      <style>{`@keyframes pulseAnim{0%,100%{opacity:1}50%{opacity:0.5}}`}</style>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}`}</style>
     </div>
   );
 }

@@ -32,10 +32,10 @@ export default function BackupStatus({ autoTrigger = true }: Props) {
   const [log,        setLog]        = useState<string[]>([]);
   const [done,       setDone]       = useState(false);
   
-  // ── FIX: Tambahkan state untuk tracking status 'due' ────────────────
-  const [backupIsDue, setBackupIsDue] = useState(false);
+  // ── FIX: State untuk menghindari hydration mismatch ─────────
   const [isClientReady, setIsClientReady] = useState(false);
-  // ────────────────────────────────────────────────────────────────────
+  const [backupDue, setBackupDue] = useState(false);
+  // ───────────────────────────────────────────────────────────
 
   const refresh = useCallback(() => {
     try {
@@ -46,22 +46,22 @@ export default function BackupStatus({ autoTrigger = true }: Props) {
   }, []);
 
   useEffect(() => {
-    // Tandai bahwa client sudah siap (hydrated)
+    // ── FIX: Tandai bahwa client sudah ready ──────────────────
     setIsClientReady(true);
-
+    
     refresh();
     
-    // ── FIX: Pindahkan logika isBackupDue() ke sini ───────────────────
+    // ── FIX: Hitung isBackupDue hanya di client ───────────────
     try {
       const due = isBackupDue();
-      setBackupIsDue(due);
-
+      setBackupDue(due);
+      
       if (autoTrigger && due) {
         const t = setTimeout(() => setShowPrompt(true), 4000);
         return () => clearTimeout(t);
       }
     } catch (e) {
-      console.error('Error checking backup due:', e);
+      console.error('Failed to check backup due:', e);
     }
   }, [autoTrigger, refresh]);
 
@@ -82,8 +82,6 @@ export default function BackupStatus({ autoTrigger = true }: Props) {
       setRunning(null);
       refresh();
       setShowPrompt(false);
-      // Re-calculate due status after backup
-      try { setBackupIsDue(isBackupDue()); } catch {}
     }
   };
 
@@ -98,7 +96,6 @@ export default function BackupStatus({ autoTrigger = true }: Props) {
     } finally {
       setRunning(null);
       refresh();
-      try { setBackupIsDue(isBackupDue()); } catch {}
     }
   };
 
@@ -113,17 +110,16 @@ export default function BackupStatus({ autoTrigger = true }: Props) {
     } finally {
       setRunning(null);
       refresh();
-      try { setBackupIsDue(isBackupDue()); } catch {}
     }
   };
 
   const isRunning = running !== null;
 
-  // ── FIX: Gunakan state 'backupIsDue' untuk className, bukan panggil fungsi langsung ──
-  // Saat SSR (isClientReady=false), gunakan tampilan default (tidak pulse)
+  // ── FIX: Gunakan conditional rendering untuk menghindari hydration mismatch ──
+  // Sebelum client ready, render button dengan className default (tanpa pulse)
   const buttonClassName = `fixed bottom-6 left-6 z-[7999] w-10 h-10 rounded-xl flex items-center justify-center
     shadow-lg transition-all duration-300 border
-    ${isClientReady && backupIsDue 
+    ${isClientReady && backupDue 
       ? "bg-amber-500/20 text-amber-400 border-amber-500/40 animate-pulse" 
       : "bg-[var(--c-surface)] text-[var(--c-muted)] border-[var(--c-border)] hover:text-[var(--c-text)]"}`;
 

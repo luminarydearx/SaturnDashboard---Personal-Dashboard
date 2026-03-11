@@ -1,99 +1,131 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { PublicUser } from '@/types';
 import { useToast } from '@/components/ui/Toast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import {
-  MdCode, MdLock, MdLockOpen, MdRefresh,
-  MdWarning, MdCheckCircle,
-  MdSettings, MdSchedule, MdUpload, MdClose, MdImage, MdVideoLibrary,
-  MdCalendarToday, MdOpenInNew, MdInfo, MdPlayArrow, MdStop, MdVisibility
+  MdCode, MdOpenInNew, MdLock, MdLockOpen, MdRefresh, MdWarning,
+  MdCheckCircle, MdVisibility, MdPlayArrow, MdStop, MdSettings,
+  MdSchedule, MdImage, MdClose, MdKey, MdPowerSettingsNew, MdCheck,
+  MdCalendarToday, MdVideoLibrary, MdInfo, MdUpload,
 } from 'react-icons/md';
 import { SiGithub } from 'react-icons/si';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// ── Constants ─────────────────────────────────────────────────────────────
-const AUTOGEN_URL          = 'https://auto-generator-app.vercel.app'; // Ganti dengan URL deploy Anda
-const AUTOGEN_REPO_OWNER   = process.env.NEXT_PUBLIC_GITHUB_OWNER   || 'luminarydearx';
-const AUTOGEN_REPO_NAME    = process.env.NEXT_PUBLIC_GITHUB_REPO    || 'SaturnDashboard---Personal-Dashboard';
-const AUTOGEN_PROJECT_PATH = process.env.NEXT_PUBLIC_AUTOGEN_PROJECT_PATH || 'project/AutoGen';
+// ─── Constants ────────────────────────────────────────────────────────────────
+const AUTOGEN_URL          = 'https://auto-generator-app.vercel.app';
+const AUTOGEN_GITHUB       = 'https://github.com/luminarydearx/SaturnDashboard---Personal-Dashboard';
+const AUTOGEN_REPO_OWNER   = process.env.NEXT_PUBLIC_GITHUB_OWNER          || 'luminarydearx';
+const AUTOGEN_REPO_NAME    = process.env.NEXT_PUBLIC_GITHUB_REPO           || 'SaturnDashboard---Personal-Dashboard';
+const AUTOGEN_PROJECT_PATH = process.env.NEXT_PUBLIC_AUTOGEN_PROJECT_PATH  || 'project/AutoGen';
 const BRANCH               = 'master';
-const CLOUD_NAME           = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME    || 'dg3awuzug';
-const UPLOAD_PRESET        = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
+const CLOUD_NAME           = 'dg3awuzug';
+const UPLOAD_PRESET        = 'ml_default';
 
-// Helper: ensure path is prefixed with project/AutoGen/
-function autoGenPath(filePath: string): string {
+// Prepend project/AutoGen/ to a relative path
+function agPath(p: string) {
   const base = AUTOGEN_PROJECT_PATH.replace(/\/$/, '');
-  const fp   = filePath.replace(/^\//, '');
-  if (fp.startsWith(base)) return fp;
-  return `${base}/${fp}`;
+  const fp   = p.replace(/^\//, '');
+  return fp.startsWith(base) ? fp : `${base}/${fp}`;
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface Schedule {
-  lockdownEnabled: boolean; lockdownAt: string;
-  lockdownReason: string; lockdownMediaUrl: string;
-  unlockEnabled: boolean; unlockAt: string;
-}
-interface LockdownData {
-  active: boolean; reason: string; timestamp: string; mediaUrl?: string;
+  lockdownEnabled:  boolean;
+  lockdownAt:       string;   // ISO
+  lockdownReason:   string;
+  lockdownMediaUrl: string;   // Cloudinary URL
+  unlockEnabled:    boolean;
+  unlockAt:         string;   // ISO
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────
-interface Props { user: PublicUser }
+interface LockdownJson {
+  active:    boolean;
+  reason:    string;
+  timestamp: string;
+  mediaUrl?: string;
+}
 
-const DEFAULT_SCHEDULE: Schedule = { 
-  lockdownEnabled:false, lockdownAt:'', lockdownReason:'', lockdownMediaUrl:'', 
-  unlockEnabled:false, unlockAt:'' 
+const DEFAULT_SCHEDULE: Schedule = {
+  lockdownEnabled: false,  lockdownAt:       '',
+  lockdownReason:  '',     lockdownMediaUrl: '',
+  unlockEnabled:   false,  unlockAt:         '',
 };
 
-export default function AutoGenClient({ user }: Props) {
-  // Ubah default tab menjadi 'preview'
-  const [tab, setTab]                     = useState<'preview'|'settings'>('preview');
-  
-  const [lockdownActive, setLockdownActive] = useState(false);
-  const [lockdownLoading, setLockdownLoading] = useState(false);
-  const [lockdownReason, setLockdownReason]   = useState('');
-  const [showLockConfirm, setShowLockConfirm] = useState(false);
-  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
-  const [pushing, setPushing]               = useState(false);
-  const [pushStatus, setPushStatus]         = useState('');
-  
-  const [schedule, setSchedule]             = useState<Schedule>(DEFAULT_SCHEDULE);
-  const [scheduleLoading, setScheduleLoading] = useState(false);
-  const [scheduleSaved, setScheduleSaved]   = useState(false);
-  
-  const [mediaFile, setMediaFile]           = useState<File|null>(null);
-  const [mediaPreview, setMediaPreview]     = useState('');
-  const [mediaUrl, setMediaUrl]             = useState('');
-  const [uploadingMedia, setUploadingMedia] = useState(false);
-  const mediaInputRef                       = useRef<HTMLInputElement>(null);
-  
-  const [iframeKey, setIframeKey]           = useState(0);
-  const [showIframe, setShowIframe]         = useState(false);
+// ─── Main Component ───────────────────────────────────────────────────────────
+interface Props { user: PublicUser }
 
-  const { success, error: toastErr, info }  = useToast();
+export default function AutoGenClient({ user: _user }: Props) {
+  const [tab,              setTab]             = useState<'preview' | 'settings'>('settings');
 
-  // ── On mount: load status + schedule ──────────────────────────────────
+  // Preview
+  const [iframeKey,        setIframeKey]       = useState(0);
+  const [showIframe,       setShowIframe]      = useState(false);
+
+  // Lockdown
+  const [lockdownActive,   setLockdownActive]  = useState(false);
+  const [lockdownLoading,  setLockdownLoading] = useState(false);
+  const [lockdownReason,   setLockdownReason]  = useState('');
+  const [showLockConfirm,  setShowLockConfirm] = useState(false);
+  const [showUnlockConf,   setShowUnlockConf]  = useState(false);
+
+  // Push status
+  const [pushing,          setPushing]         = useState(false);
+  const [pushStatus,       setPushStatus]      = useState('');
+
+  // Schedule
+  const [schedule,         setSchedule]        = useState<Schedule>(DEFAULT_SCHEDULE);
+  const [schedSaving,      setSchedSaving]     = useState(false);
+  const [schedSaved,       setSchedSaved]      = useState(false);
+
+  // Media (for current lockdown)
+  const [mediaFile,        setMediaFile]       = useState<File | null>(null);
+  const [mediaPreview,     setMediaPreview]    = useState('');
+  const [mediaUrl,         setMediaUrl]        = useState('');
+  const [uploadingMedia,   setUploadingMedia]  = useState(false);
+  const mediaRef                               = useRef<HTMLInputElement>(null);
+
+  // Token
+  const [showTokenInput,   setShowTokenInput]  = useState(false);
+  const [tokenInput,       setTokenInput]      = useState('');
+  const [tokenPreview,     setTokenPreview]    = useState('');
+  const [tokenSaving,      setTokenSaving]     = useState(false);
+  const [tokenSaved,       setTokenSaved]      = useState(false);
+
+  // Restart
+  const [restartLoading,   setRestartLoading]  = useState(false);
+
+  const { success, error: toastErr } = useToast();
+
+  // ─── On mount ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    fetch(`${AUTOGEN_URL}/lockdown.json?t=${Date.now()}`, { cache:'no-store' })
+    // 1. Fetch live lockdown status from deployed site
+    fetch(`${AUTOGEN_URL}/lockdown.json?_=${Date.now()}`, { cache: 'no-store' })
       .then(r => r.json())
-      .then((d: LockdownData) => {
+      .then((d: LockdownJson) => {
         setLockdownActive(!!d?.active);
-        if (d?.active && d.reason) setLockdownReason(d.reason);
+        if (d?.active) { setLockdownReason(d.reason || ''); }
         if (d?.mediaUrl) setMediaUrl(d.mediaUrl);
       })
       .catch(() => {});
-    
-    fetch('/api/autogen/schedule', { cache:'no-store' })
+
+    // 2. Load saved schedule
+    fetch('/api/autogen/schedule', { cache: 'no-store' })
       .then(r => r.json())
       .then((s: any) => { if (s && !s.error) setSchedule(s as Schedule); })
       .catch(() => {});
+
+    // 3. Load token preview
+    fetch('/api/settings', { cache: 'no-store' })
+      .then(r => r.json())
+      .then((d: any) => { if (d?.tokenPreview) setTokenPreview(d.tokenPreview); })
+      .catch(() => {});
   }, []);
 
-  // ── Schedule poll every 60s ────────────────────────────────────────────
+  // ─── Schedule polling ─────────────────────────────────────────────────────
   useEffect(() => {
-    const check = () => {
+    const tick = () => {
       const now = Date.now();
       if (schedule.lockdownEnabled && schedule.lockdownAt && !lockdownActive) {
         if (now >= new Date(schedule.lockdownAt).getTime()) {
@@ -106,490 +138,701 @@ export default function AutoGenClient({ user }: Props) {
         }
       }
     };
-    check();
-    const iv = setInterval(check, 60_000);
+    tick();
+    const iv = setInterval(tick, 60_000);
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedule, lockdownActive]);
 
-  // ── Push via server API ────────────────────────────────────────────────
-  const pushToGitHub = async (files: {path:string;content:string}[], message: string): Promise<boolean> => {
-    setPushing(true); setPushStatus('Pushing to GitHub…');
+  // ─── Push to GitHub (via server API — token stays server-side) ────────────
+  const pushToGitHub = async (files: { path: string; content: string }[], msg: string): Promise<boolean> => {
+    setPushing(true);
+    setPushStatus('Pushing ke GitHub…');
     try {
       const res = await fetch('/api/github/push', {
-        method: 'POST', headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ owner:AUTOGEN_REPO_OWNER, repo:AUTOGEN_REPO_NAME, branch:BRANCH, files, message }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ owner: AUTOGEN_REPO_OWNER, repo: AUTOGEN_REPO_NAME, branch: BRANCH, files, message: msg }),
       });
       const d = await res.json();
-      if (d.success) { 
-        setPushStatus('✓ Pushed — Vercel deploying…'); 
-        success('Pushed! Vercel deploying in ~30s'); 
-        setTimeout(()=>setPushStatus(''),5000); 
-        return true; 
+      if (res.ok && d.success) {
+        setPushStatus('✓ Pushed — Vercel deploying…');
+        success('Pushed! Vercel akan deploy dalam ~30 detik');
+        setTimeout(() => setPushStatus(''), 6000);
+        return true;
       }
-      throw new Error(d.error||d.message||'Push failed');
-    } catch (err: any) {
-      toastErr(err.message||'Push failed'); 
-      setPushStatus('✗ Push failed'); 
-      setTimeout(()=>setPushStatus(''),4000); 
+      throw new Error(d.error || d.message || d.errors?.join(', ') || 'Push gagal');
+    } catch (e: any) {
+      toastErr(e.message || 'Push gagal');
+      setPushStatus('✗ Push gagal');
+      setTimeout(() => setPushStatus(''), 5000);
       return false;
     } finally { setPushing(false); }
   };
 
-  // ── Cloudinary upload ──────────────────────────────────────────────────
-  const uploadMedia = async (file: File): Promise<string> => {
+  // ─── Cloudinary upload ────────────────────────────────────────────────────
+  const uploadToCloudinary = async (file: File): Promise<string> => {
     setUploadingMedia(true);
     try {
-      const fd = new FormData(); fd.append('file',file); fd.append('upload_preset',UPLOAD_PRESET);
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`,{method:'POST',body:fd});
-      if (!res.ok) throw new Error('Cloudinary upload failed');
-      return (await res.json()).secure_url as string;
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('upload_preset', UPLOAD_PRESET);
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, { method: 'POST', body: fd });
+      if (!res.ok) throw new Error('Upload Cloudinary gagal');
+      const data = await res.json();
+      return data.secure_url as string;
     } finally { setUploadingMedia(false); }
   };
 
-  const handleMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    setMediaFile(file); setMediaUrl('');
-    const r = new FileReader(); r.onload = ev => setMediaPreview(ev.target?.result as string); r.readAsDataURL(file);
+  // ─── Media selection ──────────────────────────────────────────────────────
+  const onMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setMediaFile(f);
+    setMediaUrl('');
+    const reader = new FileReader();
+    reader.onload = ev => setMediaPreview(ev.target?.result as string);
+    reader.readAsDataURL(f);
   };
+  const clearMedia = () => {
+    setMediaFile(null); setMediaPreview(''); setMediaUrl('');
+    if (mediaRef.current) mediaRef.current.value = '';
+  };
+  const isVideo = (u: string) => /\.(mp4|webm|mov|avi|ogg)(\?|$)/i.test(u);
 
-  const removeMedia = () => { setMediaFile(null); setMediaPreview(''); setMediaUrl(''); if(mediaInputRef.current) mediaInputRef.current.value=''; };
-
-  // ── Execute lockdown ───────────────────────────────────────────────────
-  const executeLockdown = async (reason: string, existingMedia='', fromSchedule=false) => {
+  // ─── Execute lockdown ─────────────────────────────────────────────────────
+  const executeLockdown = async (reason: string, existingMediaUrl = '', fromSchedule = false) => {
     setLockdownLoading(true);
     try {
-      let finalMedia = existingMedia || (mediaUrl && !mediaFile ? mediaUrl : '');
+      let finalMediaUrl = existingMediaUrl || mediaUrl;
+
+      // Upload new file if selected
       if (mediaFile && !mediaUrl) {
-        try { finalMedia = await uploadMedia(mediaFile); setMediaUrl(finalMedia); }
-        catch { toastErr('Media upload gagal — lanjut tanpa media'); }
+        try {
+          finalMediaUrl = await uploadToCloudinary(mediaFile);
+          setMediaUrl(finalMediaUrl);
+        } catch { toastErr('Upload media gagal — lanjut tanpa media'); }
       }
-      const data: LockdownData = { active:true, reason:reason||'', timestamp:new Date().toISOString(), ...(finalMedia?{mediaUrl:finalMedia}:{}) };
-      const ok = await pushToGitHub([{ path:autoGenPath('public/lockdown.json'), content:JSON.stringify(data,null,2) }],
-        `🔒 AutoGen: Lockdown${reason?` — ${reason}`:''}`);
+
+      const payload: LockdownJson = {
+        active: true, reason: reason || '', timestamp: new Date().toISOString(),
+        ...(finalMediaUrl ? { mediaUrl: finalMediaUrl } : {}),
+      };
+
+      const ok = await pushToGitHub(
+        [{ path: agPath('public/lockdown.json'), content: JSON.stringify(payload, null, 2) }],
+        `🔒 AutoGen: Lockdown${reason ? ` — ${reason}` : ''}`
+      );
       if (ok) {
         setLockdownActive(true);
         if (fromSchedule) {
-          const upd = {...schedule,lockdownEnabled:false};
+          const upd = { ...schedule, lockdownEnabled: false };
           setSchedule(upd);
-          await fetch('/api/autogen/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(upd)});
+          fetch('/api/autogen/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(upd) }).catch(() => {});
         }
       }
     } finally { setLockdownLoading(false); }
   };
 
-  const executeUnlock = async (fromSchedule=false) => {
+  // ─── Execute unlock ───────────────────────────────────────────────────────
+  const executeUnlock = async (fromSchedule = false) => {
     setLockdownLoading(true);
     try {
-      const data: LockdownData = { active:false, reason:'', timestamp:new Date().toISOString() };
-      const ok = await pushToGitHub([{ path:autoGenPath('public/lockdown.json'), content:JSON.stringify(data,null,2) }], '🔓 AutoGen: Lockdown deactivated');
+      const payload: LockdownJson = { active: false, reason: '', timestamp: new Date().toISOString() };
+      const ok = await pushToGitHub(
+        [{ path: agPath('public/lockdown.json'), content: JSON.stringify(payload, null, 2) }],
+        '🔓 AutoGen: Lockdown deactivated'
+      );
       if (ok) {
-        setLockdownActive(false); setLockdownReason(''); setMediaUrl(''); setMediaFile(null); setMediaPreview('');
+        setLockdownActive(false); setLockdownReason(''); clearMedia();
         if (fromSchedule) {
-          const upd = {...schedule,unlockEnabled:false};
+          const upd = { ...schedule, unlockEnabled: false };
           setSchedule(upd);
-          await fetch('/api/autogen/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(upd)});
+          fetch('/api/autogen/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(upd) }).catch(() => {});
         }
       }
     } finally { setLockdownLoading(false); }
   };
 
-  const handleLockdown   = () => { setShowLockConfirm(false);   executeLockdown(lockdownReason); };
-  const handleUnlockdown = () => { setShowUnlockConfirm(false); executeUnlock(); };
+  const handleLockdown  = () => { setShowLockConfirm(false); executeLockdown(lockdownReason); };
+  const handleUnlock    = () => { setShowUnlockConf(false);  executeUnlock(); };
 
-  // ── Save schedule ──────────────────────────────────────────────────────
+  // ─── Save schedule ────────────────────────────────────────────────────────
   const saveSchedule = async () => {
-    setScheduleLoading(true);
+    setSchedSaving(true);
     try {
-      const res = await fetch('/api/autogen/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(schedule)});
+      const res = await fetch('/api/autogen/schedule', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(schedule),
+      });
       const d = await res.json();
-      if (d.success) { setScheduleSaved(true); setTimeout(()=>setScheduleSaved(false),2500); }
-      else throw new Error(d.error||'Failed');
-    } catch(err:any) { toastErr(err.message); } finally { setScheduleLoading(false); }
+      if (!d.success) throw new Error(d.error || 'Gagal');
+      setSchedSaved(true); setTimeout(() => setSchedSaved(false), 2500);
+    } catch (e: any) { toastErr(e.message); } finally { setSchedSaving(false); }
   };
 
-  const isVideo = (u:string) => /\.(mp4|webm|mov|avi)(\?|$)/i.test(u);
-  const fmtTime = (iso:string) => { try { return new Date(iso).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); } catch { return iso; } };
+  // ─── Save GitHub token ────────────────────────────────────────────────────
+  const saveToken = async () => {
+    if (!tokenInput.trim()) { toastErr('Token kosong'); return; }
+    setTokenSaving(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubToken: tokenInput.trim() }),
+      });
+      const d = await res.json();
+      if (!d.success) throw new Error(d.error || 'Gagal');
+      setTokenPreview(tokenInput.slice(0, 8) + '••••••••' + tokenInput.slice(-4));
+      setTokenInput(''); setShowTokenInput(false);
+      setTokenSaved(true); setTimeout(() => setTokenSaved(false), 3000);
+      success('Token disimpan! Coba lockdown sekarang.');
+    } catch (e: any) { toastErr(e.message); } finally { setTokenSaving(false); }
+  };
 
+  // ─── Redeploy AutoGen on Vercel ───────────────────────────────────────────
+  const restartServer = async () => {
+    setRestartLoading(true);
+    try {
+      const res = await fetch('/api/server/restart', { method: 'POST' });
+      const d = await res.json();
+      if (d.success) {
+        success(`AutoGen redeploy dimulai! Selesai ~30 detik. ${d.deploymentId ? `(ID: ${d.deploymentId})` : ''}`);
+      } else {
+        // Show actionable error — likely missing env vars
+        toastErr(d.message || 'Redeploy gagal');
+        if (d.missingVars?.length) {
+          console.warn('[AutoGen Restart] Missing env vars:', d.missingVars);
+        }
+      }
+    } catch (e: any) {
+      toastErr(e.message || 'Gagal koneksi ke server');
+    } finally { setRestartLoading(false); }
+  };
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+  const fmtDT = (iso: string) => {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleString('id-ID', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+    catch { return iso; }
+  };
+  const toLocalDT = (iso: string) => {
+    if (!iso) return '';
+    try { return new Date(iso).toISOString().slice(0, 16); } catch { return ''; }
+  };
+  const fromLocalDT = (val: string) => val ? new Date(val).toISOString() : '';
+
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
+
+      {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{background:'linear-gradient(135deg,rgba(var(--c-accent-rgb),0.3),rgba(var(--c-accent2-rgb),0.2))',border:'1px solid rgba(var(--c-accent-rgb),0.2)'}}>
-            <MdCode size={24} style={{color:'var(--c-accent)'}}/>
+            style={{ background: 'linear-gradient(135deg,rgba(var(--c-accent-rgb),.3),rgba(var(--c-accent2-rgb),.2))', border: '1px solid rgba(var(--c-accent-rgb),.2)' }}>
+            <MdCode size={24} style={{ color: 'var(--c-accent)' }} />
           </div>
           <div>
-            <h1 className="font-orbitron text-2xl font-bold text-[var(--c-text)]">AutoGen Control</h1>
+            <h1 className="font-orbitron text-2xl font-bold text-[var(--c-text)]">AutoGen</h1>
             <a href={AUTOGEN_URL} target="_blank" rel="noreferrer"
-              className="text-sm hover:underline flex items-center gap-1" style={{color:'var(--c-accent)'}}>
-              {AUTOGEN_URL} <MdOpenInNew size={12}/>
+              className="text-sm flex items-center gap-1 hover:underline" style={{ color: 'var(--c-accent)' }}>
+              {AUTOGEN_URL} <MdOpenInNew size={12} />
             </a>
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Push status */}
           {pushStatus && (
             <span className="text-xs px-3 py-1.5 rounded-full font-mono"
-              style={{background:'var(--c-surface)',border:'1px solid var(--c-border)',color:'var(--c-muted)'}}>
+              style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)', color: 'var(--c-muted)' }}>
               {pushStatus}
             </span>
           )}
+
+          {/* Lockdown status badge */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-            style={{background:lockdownActive?'rgba(239,68,68,0.1)':'rgba(34,197,94,0.1)',border:lockdownActive?'1px solid rgba(239,68,68,0.3)':'1px solid rgba(34,197,94,0.3)',color:lockdownActive?'#f87171':'#4ade80'}}>
-            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{background:lockdownActive?'#f87171':'#4ade80'}}/>
-            {lockdownActive?'LOCKDOWN ACTIVE':'ONLINE'}
+            style={{
+              background: lockdownActive ? 'rgba(239,68,68,.1)' : 'rgba(34,197,94,.1)',
+              border:     lockdownActive ? '1px solid rgba(239,68,68,.3)' : '1px solid rgba(34,197,94,.3)',
+              color:      lockdownActive ? '#f87171' : '#4ade80',
+            }}>
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse"
+              style={{ background: lockdownActive ? '#f87171' : '#4ade80' }} />
+            {lockdownActive ? 'LOCKDOWN ACTIVE' : 'ONLINE'}
           </div>
+
+          {/* Quick lock/unlock */}
           {lockdownActive ? (
-            <button onClick={()=>setShowUnlockConfirm(true)} disabled={lockdownLoading||pushing}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
-              style={{background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.3)',color:'#4ade80'}}>
-              <MdLockOpen size={16}/>{(lockdownLoading||pushing)?'Processing…':'Unlock Site'}
+            <button onClick={() => setShowUnlockConf(true)} disabled={lockdownLoading || pushing}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all"
+              style={{ background: 'rgba(34,197,94,.1)', border: '1px solid rgba(34,197,94,.3)', color: '#4ade80' }}>
+              <MdLockOpen size={15} />{(lockdownLoading || pushing) ? '…' : 'Unlock'}
             </button>
           ) : (
-            <button onClick={()=>setShowLockConfirm(true)} disabled={lockdownLoading||pushing}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
-              style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171'}}>
-              <MdLock size={16}/>{(lockdownLoading||pushing)?'Processing…':'Lockdown Now'}
+            <button onClick={() => setShowLockConfirm(true)} disabled={lockdownLoading || pushing}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all"
+              style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', color: '#f87171' }}>
+              <MdLock size={15} />{(lockdownLoading || pushing) ? '…' : 'Lockdown'}
             </button>
           )}
-          <a href={`https://github.com/${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}`} target="_blank" rel="noreferrer"
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-[var(--c-muted)] hover:text-[var(--c-text)] transition-colors"
-            style={{background:'var(--c-surface)',border:'1px solid var(--c-border)'}}>
-            <SiGithub size={15}/>
+
+          {/* GitHub Token button */}
+          <button onClick={() => setShowTokenInput(p => !p)} title={tokenPreview || 'Set GitHub Token'}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+            style={{
+              background: tokenSaved ? 'rgba(34,197,94,.1)' : 'var(--c-surface)',
+              border:     tokenSaved ? '1px solid rgba(34,197,94,.3)' : `1px solid ${tokenPreview ? 'var(--c-border)' : 'rgba(239,68,68,.4)'}`,
+              color:      tokenSaved ? '#4ade80' : (tokenPreview ? 'var(--c-muted)' : '#f87171'),
+            }}>
+            {tokenSaved ? <MdCheck size={14} /> : <MdKey size={14} />}
+            {tokenPreview ? tokenPreview : 'Set Token'}
+          </button>
+
+          {/* Restart button */}
+          <button onClick={restartServer} disabled={restartLoading} title="Redeploy AutoGen di Vercel"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+            style={{ background: 'rgba(var(--c-accent-rgb),.08)', border: '1px solid rgba(var(--c-accent-rgb),.2)', color: 'var(--c-accent)' }}>
+            <MdPowerSettingsNew size={14} className={restartLoading ? 'animate-spin' : ''} />
+            {restartLoading ? 'Deploying…' : 'Redeploy'}
+          </button>
+
+          {/* GitHub link */}
+          <a href={AUTOGEN_GITHUB} target="_blank" rel="noreferrer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[var(--c-muted)] hover:text-[var(--c-text)] transition-colors"
+            style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)' }}>
+            <SiGithub size={14} />
           </a>
         </div>
       </div>
 
-      {/* Tabs - Preview & Settings Only */}
+      {/* ══ TOKEN INPUT (collapsible) ════════════════════════════════════════ */}
+      {showTokenInput && (
+        <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }}
+          className="rounded-2xl p-4 flex flex-col gap-3"
+          style={{ background: 'var(--c-surface)', border: '1px solid rgba(239,68,68,.25)' }}>
+          <div className="flex items-center gap-2">
+            <MdKey size={15} className="text-red-400" />
+            <span className="text-[var(--c-text)] text-sm font-semibold">Update GitHub Token</span>
+            <span className="ml-auto text-[var(--c-muted)] text-xs">
+              Butuh scope: <code className="font-mono" style={{ color:'var(--c-accent)' }}>repo</code>
+            </span>
+          </div>
+          {tokenPreview && (
+            <p className="text-xs font-mono text-amber-400">Token aktif: {tokenPreview}</p>
+          )}
+          <div className="flex gap-2">
+            <input type="password" value={tokenInput} onChange={e => setTokenInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && saveToken()}
+              placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              className="saturn-input flex-1 focus:outline-none font-mono text-xs" style={{ paddingLeft: 12 }} />
+            <button onClick={saveToken} disabled={tokenSaving || !tokenInput.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold btn-primary flex-shrink-0">
+              {tokenSaving ? <MdRefresh size={14} className="animate-spin" /> : <MdCheck size={14} />}
+              {tokenSaving ? 'Saving…' : 'Save'}
+            </button>
+            <button onClick={() => { setShowTokenInput(false); setTokenInput(''); }}
+              className="p-2 rounded-xl text-[var(--c-muted)] hover:text-[var(--c-text)] transition-colors"
+              style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)' }}>
+              <MdClose size={14} />
+            </button>
+          </div>
+          <p className="text-[var(--c-muted)] text-xs">
+            Buat token di{' '}
+            <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer"
+              className="underline" style={{ color: 'var(--c-accent)' }}>
+              github.com/settings/tokens
+            </a>{' '}
+            → Classic Token → centang <code className="font-mono">repo</code>
+          </p>
+        </motion.div>
+      )}
+
+      {/* ══ TABS ════════════════════════════════════════════════════════════ */}
       <div className="flex gap-1"
-        style={{background:'var(--c-surface)',border:'1px solid var(--c-border)',padding:5,borderRadius:14}}>
+        style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)', padding: 5, borderRadius: 14 }}>
         {([
-          {id:'preview', label:'Preview', icon:MdVisibility},
-          {id:'settings', label:'Settings', icon:MdSettings}
-        ] as const).map(({id,label,icon:Icon})=>(
-          <button key={id} onClick={()=>setTab(id)}
+          { id: 'settings', label: 'Settings',  icon: MdSettings  },
+          { id: 'preview',  label: 'Preview',   icon: MdVisibility },
+        ] as const).map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => setTab(id)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
-            style={{background:tab===id?'var(--c-gradient-r)':'transparent',color:tab===id?'#fff':'var(--c-muted)',boxShadow:tab===id?`0 4px 14px rgba(var(--c-accent-rgb),0.35)`:'none'}}>
-            <Icon size={15}/>{label}
+            style={{
+              background: tab === id ? 'var(--c-gradient-r)' : 'transparent',
+              color:      tab === id ? '#fff' : 'var(--c-muted)',
+              boxShadow:  tab === id ? '0 4px 14px rgba(var(--c-accent-rgb),.35)' : 'none',
+            }}>
+            <Icon size={15} /> {label}
           </button>
         ))}
       </div>
 
+      {/* ══ TAB CONTENT ═════════════════════════════════════════════════════ */}
       <AnimatePresence mode="wait">
-        {/* ──────── PREVIEW TAB ──────── */}
+
+        {/* ── SETTINGS TAB ────────────────────────────────────────────────── */}
+        {tab === 'settings' && (
+          <motion.div key="settings" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }}
+            className="flex flex-col gap-5">
+
+            {/* Info banner */}
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl"
+              style={{ background: 'rgba(var(--c-accent-rgb),.07)', border: '1px solid rgba(var(--c-accent-rgb),.18)' }}>
+              <MdInfo size={17} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--c-accent)' }} />
+              <p className="text-[var(--c-muted)] text-xs leading-relaxed font-nunito">
+                Lockdown bekerja dengan push{' '}
+                <code className="font-mono" style={{ color:'var(--c-accent)' }}>project/AutoGen/public/lockdown.json</code>
+                {' '}ke repo{' '}
+                <strong className="text-[var(--c-text)]">{AUTOGEN_REPO_NAME}</strong>
+                {' '}(branch <code className="font-mono" style={{ color:'var(--c-accent)' }}>{BRANCH}</code>).
+                {' '}Vercel auto-deploy → site terkunci.
+              </p>
+            </div>
+
+            {/* ── LOCKDOWN CONTROL CARD ────────────────────────────────────── */}
+            <div className="rounded-2xl overflow-hidden"
+              style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)' }}>
+              <div className="flex items-center gap-3 px-5 py-4 border-b"
+                style={{ borderColor: 'var(--c-border)', background: 'rgba(239,68,68,.04)' }}>
+                <MdLock size={17} className="text-red-400" />
+                <h2 className="font-orbitron text-sm font-bold text-[var(--c-text)]">Lockdown Control</h2>
+                {lockdownActive && (
+                  <span className="ml-auto text-xs px-2.5 py-1 rounded-full font-semibold"
+                    style={{ background:'rgba(239,68,68,.15)', color:'#f87171', border:'1px solid rgba(239,68,68,.3)' }}>
+                    ACTIVE
+                  </span>
+                )}
+              </div>
+
+              <div className="p-5 flex flex-col gap-4">
+                {/* Reason */}
+                <div>
+                  <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-2">
+                    Alasan Lockdown <span className="normal-case font-normal">(opsional — ditampilkan ke pengunjung)</span>
+                  </label>
+                  <textarea value={lockdownReason} onChange={e => setLockdownReason(e.target.value)}
+                    placeholder="Contoh: Sedang maintenance, akan kembali segera…"
+                    rows={3} className="saturn-input resize-none w-full focus:outline-none"
+                    style={{ paddingLeft: 16 }} />
+                </div>
+
+                {/* Media upload */}
+                <div>
+                  <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-2">
+                    Media Pendukung <span className="normal-case font-normal">(opsional — gambar atau video)</span>
+                  </label>
+
+                  {(mediaPreview || mediaUrl) ? (
+                    <div className="relative rounded-xl overflow-hidden"
+                      style={{ background:'var(--c-bg)', border:'1px solid var(--c-border)' }}>
+                      {((mediaFile?.type.startsWith('video')) || (!mediaPreview && isVideo(mediaUrl))) ? (
+                        <video src={mediaPreview || mediaUrl} controls
+                          className="w-full max-h-52 object-contain" />
+                      ) : (
+                        <img src={mediaPreview || mediaUrl} alt="preview"
+                          className="w-full max-h-52 object-contain" />
+                      )}
+                      {mediaUrl && !mediaFile && (
+                        <div className="absolute bottom-0 left-0 right-0 px-3 py-1 text-[10px] font-mono truncate"
+                          style={{ background:'rgba(0,0,0,.7)', color:'#a5d6ff' }}>
+                          {mediaUrl}
+                        </div>
+                      )}
+                      <button onClick={clearMedia}
+                        className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-white transition-opacity hover:opacity-80"
+                        style={{ background:'rgba(239,68,68,.85)' }}>
+                        <MdClose size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => mediaRef.current?.click()}
+                      className="w-full flex flex-col items-center gap-2 py-8 rounded-xl border-2 border-dashed transition-colors hover:border-[var(--c-accent)]"
+                      style={{ borderColor:'var(--c-border)', color:'var(--c-muted)' }}>
+                      <div className="flex items-center gap-3">
+                        <MdImage size={24} /> <MdVideoLibrary size={24} />
+                      </div>
+                      <span className="text-sm font-medium">Klik untuk upload gambar / video</span>
+                      <span className="text-xs opacity-60">JPG, PNG, GIF, MP4, WebM — maks 20MB</span>
+                    </button>
+                  )}
+                  <input ref={mediaRef} type="file" className="hidden"
+                    accept="image/*,video/*" onChange={onMediaSelect} />
+                  {uploadingMedia && (
+                    <div className="flex items-center gap-2 mt-2 text-xs text-[var(--c-muted)]">
+                      <MdRefresh size={13} className="animate-spin" /> Mengupload ke Cloudinary…
+                    </div>
+                  )}
+                </div>
+
+                {/* Action button */}
+                <div className="pt-1">
+                  {lockdownActive ? (
+                    <button onClick={() => setShowUnlockConf(true)} disabled={lockdownLoading || pushing}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all"
+                      style={{ background:'rgba(34,197,94,.1)', border:'1px solid rgba(34,197,94,.3)', color:'#4ade80' }}>
+                      <MdLockOpen size={16} />
+                      {(lockdownLoading || pushing) ? 'Memproses…' : '🔓 Unlock Sekarang'}
+                    </button>
+                  ) : (
+                    <button onClick={() => setShowLockConfirm(true)} disabled={lockdownLoading || pushing}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm text-white transition-all"
+                      style={{ background:'linear-gradient(135deg,#dc2626,#ef4444)' }}>
+                      <MdLock size={16} />
+                      {(lockdownLoading || pushing) ? 'Memproses…' : '🔒 Aktifkan Lockdown Sekarang'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── SCHEDULE CARD ────────────────────────────────────────────── */}
+            <div className="rounded-2xl overflow-hidden"
+              style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)' }}>
+              <div className="flex items-center gap-3 px-5 py-4 border-b"
+                style={{ borderColor:'var(--c-border)', background:'rgba(var(--c-accent-rgb),.04)' }}>
+                <MdSchedule size={17} style={{ color:'var(--c-accent)' }} />
+                <h2 className="font-orbitron text-sm font-bold text-[var(--c-text)]">Jadwal Otomatis</h2>
+              </div>
+
+              <div className="p-5 flex flex-col gap-6">
+
+                {/* ── Auto-lockdown ── */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MdLock size={14} className="text-red-400" />
+                      <span className="text-[var(--c-text)] text-sm font-semibold">Auto-Lockdown</span>
+                    </div>
+                    {/* Toggle */}
+                    <button onClick={() => setSchedule(s => ({ ...s, lockdownEnabled: !s.lockdownEnabled }))}
+                      className="w-11 h-6 rounded-full transition-all relative flex-shrink-0"
+                      style={{ background: schedule.lockdownEnabled ? 'var(--c-accent)' : 'var(--c-border)' }}>
+                      <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all shadow-sm"
+                        style={{ left: schedule.lockdownEnabled ? '22px' : '2px' }} />
+                    </button>
+                  </div>
+
+                  {schedule.lockdownEnabled && (
+                    <div className="flex flex-col gap-3 pl-4 border-l-2" style={{ borderColor:'rgba(239,68,68,.3)' }}>
+                      <div>
+                        <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-1.5">Waktu Lockdown</label>
+                        <input type="datetime-local"
+                          value={toLocalDT(schedule.lockdownAt)}
+                          onChange={e => setSchedule(s => ({ ...s, lockdownAt: fromLocalDT(e.target.value) }))}
+                          className="saturn-input w-full focus:outline-none text-sm" style={{ paddingLeft:12 }} />
+                      </div>
+                      <div>
+                        <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-1.5">Alasan</label>
+                        <input type="text" value={schedule.lockdownReason}
+                          onChange={e => setSchedule(s => ({ ...s, lockdownReason: e.target.value }))}
+                          placeholder="Alasan lockdown terjadwal…"
+                          className="saturn-input w-full focus:outline-none text-sm" style={{ paddingLeft:12 }} />
+                      </div>
+                      <div>
+                        <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-1.5">
+                          URL Media <span className="normal-case font-normal">(opsional — Cloudinary URL)</span>
+                        </label>
+                        <input type="url" value={schedule.lockdownMediaUrl}
+                          onChange={e => setSchedule(s => ({ ...s, lockdownMediaUrl: e.target.value }))}
+                          placeholder="https://res.cloudinary.com/…"
+                          className="saturn-input w-full focus:outline-none text-sm font-mono" style={{ paddingLeft:12 }} />
+                        <p className="text-[var(--c-muted)] text-xs mt-1">
+                          Upload media dulu di panel Lockdown Control di atas, lalu paste URL-nya di sini.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Auto-unlock ── */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MdLockOpen size={14} className="text-green-400" />
+                      <span className="text-[var(--c-text)] text-sm font-semibold">Auto-Unlock</span>
+                    </div>
+                    <button onClick={() => setSchedule(s => ({ ...s, unlockEnabled: !s.unlockEnabled }))}
+                      className="w-11 h-6 rounded-full transition-all relative flex-shrink-0"
+                      style={{ background: schedule.unlockEnabled ? '#22c55e' : 'var(--c-border)' }}>
+                      <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all shadow-sm"
+                        style={{ left: schedule.unlockEnabled ? '22px' : '2px' }} />
+                    </button>
+                  </div>
+
+                  {schedule.unlockEnabled && (
+                    <div className="flex flex-col gap-3 pl-4 border-l-2" style={{ borderColor:'rgba(34,197,94,.3)' }}>
+                      <div>
+                        <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-1.5">Waktu Unlock</label>
+                        <input type="datetime-local"
+                          value={toLocalDT(schedule.unlockAt)}
+                          onChange={e => setSchedule(s => ({ ...s, unlockAt: fromLocalDT(e.target.value) }))}
+                          className="saturn-input w-full focus:outline-none text-sm" style={{ paddingLeft:12 }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Save schedule ── */}
+                <button onClick={saveSchedule} disabled={schedSaving}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                  style={{
+                    background: schedSaved ? 'rgba(34,197,94,.1)' : 'var(--c-gradient-r)',
+                    border:     schedSaved ? '1px solid rgba(34,197,94,.3)' : 'none',
+                    color:      schedSaved ? '#4ade80' : '#fff',
+                  }}>
+                  {schedSaving
+                    ? <><MdRefresh size={14} className="animate-spin" /> Menyimpan…</>
+                    : schedSaved
+                    ? <><MdCheckCircle size={14} /> Jadwal Disimpan!</>
+                    : <><MdCalendarToday size={14} /> Simpan Jadwal</>}
+                </button>
+
+                {/* ── Upcoming events preview ── */}
+                {((schedule.lockdownEnabled && schedule.lockdownAt) || (schedule.unlockEnabled && schedule.unlockAt)) && (
+                  <div className="rounded-xl p-4 flex flex-col gap-2"
+                    style={{ background:'var(--c-bg)', border:'1px solid var(--c-border)' }}>
+                    <p className="text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-1">
+                      Jadwal Tersimpan
+                    </p>
+                    {schedule.lockdownEnabled && schedule.lockdownAt && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span>🔒</span>
+                        <span className="text-[var(--c-text)]">Lockdown:</span>
+                        <span className="font-semibold" style={{ color:'var(--c-accent)' }}>{fmtDT(schedule.lockdownAt)}</span>
+                      </div>
+                    )}
+                    {schedule.unlockEnabled && schedule.unlockAt && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span>🔓</span>
+                        <span className="text-[var(--c-text)]">Unlock:</span>
+                        <span className="font-semibold" style={{ color:'var(--c-accent)' }}>{fmtDT(schedule.unlockAt)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </motion.div>
+        )}
+
+        {/* ── PREVIEW TAB ─────────────────────────────────────────────────── */}
         {tab === 'preview' && (
-          <motion.div key="preview" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0}}
+          <motion.div key="preview" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }}
             className="rounded-2xl overflow-hidden flex flex-col"
-            style={{background:'var(--c-surface)',border:'1px solid var(--c-border)',minHeight:600}}>
-            
+            style={{ background:'var(--c-surface)', border:'1px solid var(--c-border)', minHeight:600 }}>
+
             {/* Toolbar */}
             <div className="flex items-center gap-3 px-4 py-3 border-b flex-shrink-0"
-              style={{borderColor:'var(--c-border)',background:'var(--c-surface2)'}}>
+              style={{ borderColor:'var(--c-border)', background:'var(--c-surface2)' }}>
               <div className="flex items-center gap-1.5 flex-1 px-3 py-1.5 rounded-lg text-xs font-mono text-[var(--c-muted)]"
-                style={{background:'var(--c-bg)',border:'1px solid var(--c-border)'}}>
-                <MdOpenInNew size={12} /> {AUTOGEN_URL.replace('https://', '')}
+                style={{ background:'var(--c-bg)', border:'1px solid var(--c-border)' }}>
+                <MdOpenInNew size={12} /> {AUTOGEN_URL}
               </div>
-              <button onClick={() => { setShowIframe(true); setIframeKey(p => p+1); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all btn-primary">
-                <MdPlayArrow size={14} /> Load Preview
+              <button onClick={() => { setShowIframe(true); setIframeKey(p => p + 1); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold btn-primary">
+                <MdPlayArrow size={14} /> Preview
               </button>
               {showIframe && (
                 <>
-                  <button onClick={() => setIframeKey(p => p+1)}
+                  <button onClick={() => setIframeKey(p => p + 1)}
                     className="p-2 rounded-xl text-[var(--c-muted)] hover:text-[var(--c-text)] transition-colors"
-                    style={{background:'var(--c-surface)',border:'1px solid var(--c-border)'}}>
-                    <MdRefresh size={15} />
+                    style={{ background:'var(--c-surface)', border:'1px solid var(--c-border)' }}>
+                    <MdRefresh size={14} />
                   </button>
                   <button onClick={() => setShowIframe(false)}
                     className="p-2 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors"
-                    style={{border:'1px solid rgba(239,68,68,0.2)'}}>
-                    <MdStop size={15} />
+                    style={{ border:'1px solid rgba(239,68,68,.2)' }}>
+                    <MdStop size={14} />
                   </button>
                 </>
               )}
             </div>
 
-            {/* Content */}
+            {/* iframe / placeholder */}
             {showIframe ? (
-              <iframe
-                key={iframeKey}
-                src={AUTOGEN_URL}
-                className="flex-1 w-full border-0"
-                style={{ minHeight: 550 }}
-                title="AutoGen Preview"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              />
+              <iframe key={iframeKey} src={AUTOGEN_URL} className="flex-1 w-full border-0"
+                style={{ minHeight:550 }} title="AutoGen Preview"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20">
                 <div className="w-20 h-20 rounded-3xl flex items-center justify-center"
-                  style={{background:'linear-gradient(135deg,rgba(var(--c-accent-rgb),0.2),rgba(var(--c-accent2-rgb),0.1))',border:'1px solid rgba(var(--c-accent-rgb),0.2)'}}>
-                  <MdVisibility size={36} style={{color:'var(--c-accent)'}} />
+                  style={{ background:'linear-gradient(135deg,rgba(var(--c-accent-rgb),.2),rgba(var(--c-accent2-rgb),.1))', border:'1px solid rgba(var(--c-accent-rgb),.2)' }}>
+                  <MdVisibility size={36} style={{ color:'var(--c-accent)' }} />
                 </div>
                 <div className="text-center">
                   <p className="font-orbitron text-lg font-bold text-[var(--c-text)] mb-2">Live Preview</p>
-                  <p className="text-[var(--c-muted)] text-sm">Preview your AutoGen website in realtime</p>
-                  <p className="text-[var(--c-muted)] text-xs mt-1 font-mono">{AUTOGEN_URL.replace('https://', '')}</p>
+                  <p className="text-[var(--c-muted)] text-sm">Preview website AutoGen secara realtime</p>
                 </div>
-                <button onClick={() => { setShowIframe(true); setIframeKey(p => p+1); }} className="btn-primary">
+                <button onClick={() => { setShowIframe(true); setIframeKey(p => p + 1); }} className="btn-primary">
                   <MdPlayArrow size={18} /> Load Preview
                 </button>
               </div>
             )}
           </motion.div>
         )}
-
-        {/* ──────── SETTINGS TAB ──────── */}
-        {tab === 'settings' && (
-          <motion.div key="settings" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0}}
-            className="flex flex-col gap-5">
-            
-            {/* Info Card */}
-            <div className="flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
-              style={{background:'rgba(var(--c-accent-rgb),0.08)',border:'1px solid rgba(var(--c-accent-rgb),0.2)'}}>
-              <MdInfo size={18} className="flex-shrink-0 mt-0.5" style={{color:'var(--c-accent)'}}/>
-              <p className="text-[var(--c-muted)] leading-relaxed font-nunito text-xs">
-                Lockdown bekerja dengan push <code className="text-[var(--c-accent)] font-mono">project/AutoGen/public/lockdown.json</code> ke repo{' '}
-                <strong className="text-[var(--c-text)]">{AUTOGEN_REPO_NAME}</strong> (branch <code className="text-[var(--c-accent)] font-mono">{BRANCH}</code>).
-                Vercel auto-deploy → site terkunci. Berfungsi dari localhost maupun production.
-              </p>
-            </div>
-
-            {/* Lockdown Control */}
-            <div className="rounded-2xl overflow-hidden" style={{background:'var(--c-surface)',border:'1px solid var(--c-border)'}}>
-              <div className="flex items-center gap-3 px-5 py-4 border-b"
-                style={{borderColor:'var(--c-border)',background:'rgba(239,68,68,0.05)'}}>
-                <MdLock size={18} className="text-red-400"/>
-                <h2 className="font-orbitron text-sm font-bold text-[var(--c-text)]">Lockdown Control</h2>
-                {lockdownActive && (
-                  <span className="ml-auto text-xs px-2.5 py-1 rounded-full font-semibold"
-                    style={{background:'rgba(239,68,68,0.15)',color:'#f87171',border:'1px solid rgba(239,68,68,0.3)'}}>
-                    ACTIVE
-                  </span>
-                )}
-              </div>
-              <div className="p-5 flex flex-col gap-4">
-                {/* Reason */}
-                <div>
-                  <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-2">
-                    Alasan Lockdown <span className="normal-case font-normal">(ditampilkan ke pengunjung)</span>
-                  </label>
-                  <textarea value={lockdownReason} onChange={e=>setLockdownReason(e.target.value)}
-                    placeholder="Contoh: Sedang maintenance, akan kembali segera…"
-                    rows={3} className="saturn-input resize-none w-full focus:outline-none" style={{paddingLeft:16}}/>
-                </div>
-                
-                {/* Media Upload */}
-                <div>
-                  <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-2">
-                    Media Pendukung <span className="normal-case font-normal">(opsional — gambar / video)</span>
-                  </label>
-                  {(mediaPreview||mediaUrl) ? (
-                    <div className="relative rounded-xl overflow-hidden" style={{background:'var(--c-bg)',border:'1px solid var(--c-border)'}}>
-                      {((mediaPreview&&mediaFile?.type.startsWith('video'))||(!mediaPreview&&isVideo(mediaUrl))) ? (
-                        <video src={mediaPreview||mediaUrl} controls className="w-full max-h-48 object-contain"/>
-                      ) : (
-                        <img src={mediaPreview||mediaUrl} alt="media preview" className="w-full max-h-48 object-contain"/>
-                      )}
-                      {mediaUrl&&!mediaFile && (
-                        <div className="absolute bottom-0 left-0 right-0 px-3 py-1.5 text-[10px] font-mono truncate"
-                          style={{background:'rgba(0,0,0,0.7)',color:'#a5d6ff'}}>{mediaUrl}</div>
-                      )}
-                      <button onClick={removeMedia}
-                        className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-white"
-                        style={{background:'rgba(239,68,68,0.8)'}}>
-                        <MdClose size={14}/>
-                      </button>
-                    </div>
-                  ) : (
-                    <button onClick={()=>mediaInputRef.current?.click()}
-                      className="w-full flex flex-col items-center gap-2 py-8 rounded-xl border-2 border-dashed transition-colors hover:border-[var(--c-accent)]"
-                      style={{borderColor:'var(--c-border)',color:'var(--c-muted)'}}>
-                      <div className="flex items-center gap-3"><MdImage size={24}/><MdVideoLibrary size={24}/></div>
-                      <span className="text-sm font-medium">Klik untuk upload gambar / video</span>
-                      <span className="text-xs opacity-60">JPG, PNG, GIF, MP4, WebM — maks 20MB</span>
-                    </button>
-                  )}
-                  <input ref={mediaInputRef} type="file" className="hidden" accept="image/*,video/*" onChange={handleMediaSelect}/>
-                  {uploadingMedia && (
-                    <div className="flex items-center gap-2 mt-2 text-xs text-[var(--c-muted)]">
-                      <MdRefresh size={13} className="animate-spin"/> Mengupload ke Cloudinary…
-                    </div>
-                  )}
-                </div>
-
-                {/* Action Button */}
-                <div className="pt-1">
-                  {lockdownActive ? (
-                    <button onClick={()=>setShowUnlockConfirm(true)} disabled={lockdownLoading||pushing}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all"
-                      style={{background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.3)',color:'#4ade80'}}>
-                      <MdLockOpen size={16}/>{(lockdownLoading||pushing)?'Memproses…':'🔓 Unlock Sekarang'}
-                    </button>
-                  ) : (
-                    <button onClick={()=>setShowLockConfirm(true)} disabled={lockdownLoading||pushing}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm text-white transition-all"
-                      style={{background:'linear-gradient(135deg,#dc2626,#ef4444)'}}>
-                      <MdLock size={16}/>{(lockdownLoading||pushing)?'Memproses…':'🔒 Aktifkan Lockdown Sekarang'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Scheduled Lockdown */}
-            <div className="rounded-2xl overflow-hidden" style={{background:'var(--c-surface)',border:'1px solid var(--c-border)'}}>
-              <div className="flex items-center gap-3 px-5 py-4 border-b"
-                style={{borderColor:'var(--c-border)',background:'rgba(var(--c-accent-rgb),0.04)'}}>
-                <MdSchedule size={18} style={{color:'var(--c-accent)'}}/>
-                <h2 className="font-orbitron text-sm font-bold text-[var(--c-text)]">Jadwal Otomatis</h2>
-              </div>
-              <div className="p-5 flex flex-col gap-6">
-                {/* Lockdown Schedule */}
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <MdLock size={15} className="text-red-400"/>
-                      <span className="text-[var(--c-text)] text-sm font-semibold">Jadwal Lockdown Otomatis</span>
-                    </div>
-                    <button onClick={()=>setSchedule(s=>({...s,lockdownEnabled:!s.lockdownEnabled}))}
-                      className="w-11 h-6 rounded-full transition-all flex-shrink-0 relative"
-                      style={{background:schedule.lockdownEnabled?'var(--c-accent)':'var(--c-border)'}}>
-                      <span className="absolute top-0.5 rounded-full w-5 h-5 bg-white transition-all shadow-sm"
-                        style={{left:schedule.lockdownEnabled?'22px':'2px'}}/>
-                    </button>
-                  </div>
-                  {schedule.lockdownEnabled && (
-                    <div className="flex flex-col gap-3 pl-4 border-l-2" style={{borderColor:'rgba(239,68,68,0.3)'}}>
-                      <div>
-                        <label className="block text-[var(--c-muted)] text-xs font-semibold mb-1.5 uppercase tracking-wider">Waktu Lockdown</label>
-                        <input type="datetime-local"
-                          value={schedule.lockdownAt?schedule.lockdownAt.slice(0,16):''}
-                          onChange={e=>setSchedule(s=>({...s,lockdownAt:e.target.value?new Date(e.target.value).toISOString():''}))}
-                          className="saturn-input w-full focus:outline-none text-sm" style={{paddingLeft:12}}/>
-                      </div>
-                      <div>
-                        <label className="block text-[var(--c-muted)] text-xs font-semibold mb-1.5 uppercase tracking-wider">Alasan</label>
-                        <input type="text" value={schedule.lockdownReason}
-                          onChange={e=>setSchedule(s=>({...s,lockdownReason:e.target.value}))}
-                          placeholder="Alasan lockdown terjadwal…"
-                          className="saturn-input w-full focus:outline-none text-sm" style={{paddingLeft:12}}/>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Unlock Schedule */}
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <MdLockOpen size={15} className="text-green-400"/>
-                      <span className="text-[var(--c-text)] text-sm font-semibold">Jadwal Unlock Otomatis</span>
-                    </div>
-                    <button onClick={()=>setSchedule(s=>({...s,unlockEnabled:!s.unlockEnabled}))}
-                      className="w-11 h-6 rounded-full transition-all flex-shrink-0 relative"
-                      style={{background:schedule.unlockEnabled?'#22c55e':'var(--c-border)'}}>
-                      <span className="absolute top-0.5 rounded-full w-5 h-5 bg-white transition-all shadow-sm"
-                        style={{left:schedule.unlockEnabled?'22px':'2px'}}/>
-                    </button>
-                  </div>
-                  {schedule.unlockEnabled && (
-                    <div className="flex flex-col gap-3 pl-4 border-l-2" style={{borderColor:'rgba(34,197,94,0.3)'}}>
-                      <div>
-                        <label className="block text-[var(--c-muted)] text-xs font-semibold mb-1.5 uppercase tracking-wider">Waktu Unlock</label>
-                        <input type="datetime-local"
-                          value={schedule.unlockAt?schedule.unlockAt.slice(0,16):''}
-                          onChange={e=>setSchedule(s=>({...s,unlockAt:e.target.value?new Date(e.target.value).toISOString():''}))}
-                          className="saturn-input w-full focus:outline-none text-sm" style={{paddingLeft:12}}/>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Save Button */}
-                <button onClick={saveSchedule} disabled={scheduleLoading}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                  style={{background:scheduleSaved?'rgba(34,197,94,0.1)':'var(--c-gradient-r)',border:scheduleSaved?'1px solid rgba(34,197,94,0.3)':'none',color:scheduleSaved?'#4ade80':'#fff'}}>
-                  {scheduleLoading?<><MdRefresh size={14} className="animate-spin"/> Menyimpan…</>
-                  :scheduleSaved?<><MdCheckCircle size={14}/> Jadwal Disimpan!</>
-                  :<><MdCalendarToday size={14}/> Simpan Jadwal</>}
-                </button>
-
-                {/* Upcoming Events */}
-                {((schedule.lockdownEnabled&&schedule.lockdownAt)||(schedule.unlockEnabled&&schedule.unlockAt)) && (
-                  <div className="rounded-xl p-4 flex flex-col gap-2" style={{background:'var(--c-bg)',border:'1px solid var(--c-border)'}}>
-                    <p className="text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-1">Upcoming Events</p>
-                    {schedule.lockdownEnabled&&schedule.lockdownAt && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-red-400">🔒</span>
-                        <span className="text-[var(--c-text)]">Lockdown:</span>
-                        <span className="font-semibold" style={{color:'var(--c-accent)'}}>{fmtTime(schedule.lockdownAt)}</span>
-                      </div>
-                    )}
-                    {schedule.unlockEnabled&&schedule.unlockAt && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-green-400">🔓</span>
-                        <span className="text-[var(--c-text)]">Unlock:</span>
-                        <span className="font-semibold" style={{color:'var(--c-accent)'}}>{fmtTime(schedule.unlockAt)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
       </AnimatePresence>
 
-      {/* Lockdown Confirm Modal */}
+      {/* ══ LOCKDOWN CONFIRM MODAL ════════════════════════════════════════ */}
       {showLockConfirm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-4">
-          <motion.div initial={{scale:0.9,opacity:0}} animate={{scale:1,opacity:1}}
+          <motion.div initial={{ scale:.9, opacity:0 }} animate={{ scale:1, opacity:1 }}
             className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl"
-            style={{background:'var(--c-surface)',border:'1px solid rgba(239,68,68,0.3)'}}>
+            style={{ background:'var(--c-surface)', border:'1px solid rgba(239,68,68,.3)' }}>
             <div className="p-6">
               <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto mb-4">
-                <MdLock className="text-red-500" size={28}/>
+                <MdLock className="text-red-500" size={28} />
               </div>
               <h3 className="text-xl font-bold text-[var(--c-text)] text-center mb-2 font-orbitron">Aktifkan Lockdown?</h3>
               <p className="text-sm text-[var(--c-muted)] text-center mb-4 font-nunito">
-                Website AutoGen akan menampilkan halaman lockdown ke semua pengunjung.<br/>
-                File di-push ke GitHub → Vercel deploy otomatis.
+                Website AutoGen akan menampilkan halaman lockdown ke semua pengunjung.
+                Push ke GitHub → Vercel auto-deploy.
               </p>
-              {lockdownReason
-                ? <div className="px-4 py-3 rounded-xl text-sm mb-2" style={{background:'var(--c-bg)',border:'1px solid var(--c-border)'}}>
-                    <span className="text-[var(--c-muted)]">Alasan: </span><span className="text-[var(--c-text)]">{lockdownReason}</span>
-                  </div>
-                : <div className="flex items-center gap-2 text-xs text-amber-400 mb-2"><MdWarning size={14}/> Tidak ada alasan yang diberikan</div>
-              }
-              {(mediaPreview||mediaUrl) && (
-                <div className="flex items-center gap-2 text-xs text-[var(--c-muted)] mb-2">
-                  <MdImage size={14} style={{color:'var(--c-accent)'}}/> Media akan ditampilkan di halaman lockdown
+              {lockdownReason && (
+                <div className="px-4 py-3 rounded-xl text-sm mb-3"
+                  style={{ background:'var(--c-bg)', border:'1px solid var(--c-border)' }}>
+                  <span className="text-[var(--c-muted)]">Alasan: </span>
+                  <span className="text-[var(--c-text)]">{lockdownReason}</span>
                 </div>
               )}
-              {mediaFile&&!mediaUrl && (
+              {!lockdownReason && (
+                <div className="flex items-center gap-2 text-xs text-amber-400 mb-3">
+                  <MdWarning size={14} /> Tidak ada alasan yang diberikan
+                </div>
+              )}
+              {(mediaPreview || mediaUrl) && (
+                <div className="flex items-center gap-2 text-xs text-[var(--c-muted)] mb-2">
+                  <MdImage size={14} style={{ color:'var(--c-accent)' }} />
+                  Media akan ditampilkan di halaman lockdown
+                </div>
+              )}
+              {mediaFile && !mediaUrl && (
                 <div className="flex items-center gap-2 text-xs text-amber-400 mb-2">
-                  <MdUpload size={14}/> Media akan diupload ke Cloudinary saat proses lockdown
+                  <MdUpload size={14} /> Media akan diupload ke Cloudinary saat proses
                 </div>
               )}
             </div>
-            <div className="flex gap-3 p-4" style={{background:'rgba(0,0,0,0.1)'}}>
-              <button onClick={()=>setShowLockConfirm(false)} className="flex-1 py-2.5 rounded-xl font-bold text-sm transition btn-secondary">Batal</button>
-              <button onClick={handleLockdown} disabled={lockdownLoading||pushing}
+            <div className="flex gap-3 p-4" style={{ background:'rgba(0,0,0,.1)' }}>
+              <button onClick={() => setShowLockConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl font-bold text-sm transition btn-secondary">
+                Batal
+              </button>
+              <button onClick={handleLockdown} disabled={lockdownLoading || pushing}
                 className="flex-1 py-2.5 rounded-xl font-bold text-sm text-white bg-red-600 hover:bg-red-500 transition flex items-center justify-center gap-2">
-                <MdLock size={16}/>{(lockdownLoading||pushing)?'Memproses…':'Aktifkan Lockdown'}
+                <MdLock size={16} />
+                {(lockdownLoading || pushing) ? 'Memproses…' : 'Aktifkan Lockdown'}
               </button>
             </div>
           </motion.div>
         </div>
       )}
 
-      <ConfirmModal isOpen={showUnlockConfirm}
+      {/* ══ UNLOCK CONFIRM MODAL ══════════════════════════════════════════ */}
+      <ConfirmModal isOpen={showUnlockConf}
         title="Deaktifkan Lockdown?" type="success"
-        message="AutoGen akan kembali dapat diakses. Perubahan di-push ke GitHub dan Vercel deploy otomatis."
+        message="AutoGen akan kembali dapat diakses oleh semua pengunjung. Perubahan di-push ke GitHub → Vercel auto-deploy."
         confirmText="Unlock Site" cancelText="Batal"
-        onConfirm={handleUnlockdown} onCancel={()=>setShowUnlockConfirm(false)}
-        isLoading={lockdownLoading||pushing}/>
+        onConfirm={handleUnlock} onCancel={() => setShowUnlockConf(false)}
+        isLoading={lockdownLoading || pushing} />
     </div>
   );
 }
