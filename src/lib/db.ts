@@ -15,14 +15,28 @@ function ensureDataDir() {
 
 function readJson<T>(filename: string, defaultValue: T): T {
   ensureDataDir();
+
   const filePath = path.join(DATA_DIR, filename);
+
   if (!fs.existsSync(filePath)) {
+
+    const initialPath = path.join(process.cwd(), 'data', filename);
+
+    if (fs.existsSync(initialPath)) {
+      const initialData = fs.readFileSync(initialPath, 'utf-8');
+      fs.writeFileSync(filePath, initialData);
+      return JSON.parse(initialData);
+    }
+
     fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
     return defaultValue;
   }
+
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
-  } catch { return defaultValue; }
+  } catch {
+    return defaultValue;
+  }
 }
 
 function writeJson<T>(filename: string, data: T): void {
