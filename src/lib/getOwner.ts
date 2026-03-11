@@ -1,14 +1,27 @@
-// lib/getOwner.ts
 import { PublicUser } from "@/types";
-import usersData from "@data/users.json";
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Mengambil data user dengan role 'owner' dari users.json
  * @returns PublicUser | null
  */
 export function getOwner(): PublicUser | null {
-  const owner = (usersData as PublicUser[]).find((user) => user.role === "owner");
-  return owner || null;
+  try {
+    // Path absolut ke data/users.json di root project
+    // process.cwd() = root project, baik di lokal maupun Vercel
+    const usersPath = path.join(process.cwd(), 'data', 'users.json');
+    
+    // Baca file secara sync (hanya jalan di server, aman untuk Next.js)
+    const fileContent = fs.readFileSync(usersPath, 'utf-8');
+    const usersData = JSON.parse(fileContent) as PublicUser[];
+    
+    const owner = usersData.find((user) => user.role === "owner");
+    return owner || null;
+  } catch (error) {
+    console.error('Failed to load owner from users.json:', error);
+    return null;
+  }
 }
 
 /**
