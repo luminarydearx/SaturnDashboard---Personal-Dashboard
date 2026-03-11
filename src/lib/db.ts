@@ -2,41 +2,65 @@ import fs from 'fs';
 import path from 'path';
 import type { User, Note, BackupEntry } from '@/types';
 
-// On Vercel (serverless), file writes go to /tmp — ephemeral but functional.
-// For production persistence, use a database (Vercel Postgres, PlanetScale, etc).
+// Deteksi environment
 const IS_VERCEL = process.env.VERCEL === '1';
+
+// Tentukan folder data
+// Di Vercel: gunakan /tmp (ephemeral)
+// Di Lokal: gunakan folder 'data' di root project
 const DATA_DIR = IS_VERCEL
   ? '/tmp/saturn-data'
   : path.join(process.cwd(), 'data');
 
+// Pastikan folder ada
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
 }
 
+// Helper baca JSON dengan fallback aman
 function readJson<T>(filename: string, defaultValue: T): T {
   ensureDataDir();
   const filePath = path.join(DATA_DIR, filename);
-  if (!fs.existsSync(filePath)) {
-    // On Vercel: copy from bundled data/ (cwd) so token/settings are preserved
-    const initialPath = path.join(process.cwd(), 'data', filename);
-    if (fs.existsSync(initialPath)) {
-      const initialData = fs.readFileSync(initialPath, 'utf-8');
-      fs.writeFileSync(filePath, initialData);
-      return JSON.parse(initialData) as T;
+
+  // 1. Coba baca dari lokasi aktif (/tmp di Vercel atau /data di lokal)
+  if (fs.existsSync(filePath)) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(content) as T;
+    } catch (error) {
+      console.error(`Error parsing ${filename}:`, error);
+      // Jika corrupt, kembalikan default
+      return defaultValue;
     }
-    fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
-    return defaultValue;
   }
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
-  } catch {
-    return defaultValue;
+
+  // 2. Fallback KHUSUS LOKAL: Jika file tidak ada di /data, coba ambil dari template jika ada
+  // DI VERCEL: Kita TIDAK mencoba copy dari root karena file sensitif mungkin di-ignore .vercelignore
+  if (!IS_VERCEL) {
+    const templatePath = path.join(process.cwd(), 'data', `${filename}.example`);
+    if (fs.existsSync(templatePath)) {
+      try {
+        const content = fs.readFileSync(templatePath, 'utf-8');
+        const data = JSON.parse(content) as T;
+        // Simpan sebagai file asli
+        writeJson(filename, data);
+        return data;
+      } catch {}
+    }
   }
+
+  // 3. Jika tetap tidak ada, buat baru dengan default value
+  writeJson(filename, defaultValue);
+  return defaultValue;
 }
 
+// Helper tulis JSON
 function writeJson<T>(filename: string, data: T): void {
   ensureDataDir();
-  fs.writeFileSync(path.join(DATA_DIR, filename), JSON.stringify(data, null, 2));
+  const filePath = path.join(DATA_DIR, filename);
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
 // ── Users ────────────────────────────────────────────────────────────────
@@ -88,7 +112,6 @@ export function deleteNote(id: string): boolean {
   return true;
 }
 
-/** Auto-delete notes that have been done for > 24 hours */
 export function purgeDoneNotes(): number {
   const notes = getNotes();
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
@@ -106,11 +129,11 @@ export function purgeDoneNotes(): number {
 // ── Settings ─────────────────────────────────────────────────────────────
 export interface AutogenSchedule {
   lockdownEnabled:   boolean;
-  lockdownAt:        string;   // ISO datetime
+  lockdownAt:        string;
   lockdownReason:    string;
-  lockdownMediaUrl:  string;   // Cloudinary URL (optional)
+  lockdownMediaUrl:  string;
   unlockEnabled:     boolean;
-  unlockAt:          string;   // ISO datetime
+  unlockAt:          string;
 }
 
 export interface Settings {
@@ -132,12 +155,15 @@ export function getSettings(): Settings {
     githubToken: '', githubRepo: '', githubOwner: '', lastPush: '',
   });
 }
+
 export function saveSettings(settings: Settings): void {
   writeJson('settings.json', settings);
 }
+
 export function getAutogenSchedule(): AutogenSchedule {
   return getSettings().autogenSchedule ?? { ...DEFAULT_SCHEDULE };
 }
+
 export function saveAutogenSchedule(schedule: AutogenSchedule): void {
   saveSettings({ ...getSettings(), autogenSchedule: schedule });
 }
@@ -148,7 +174,7 @@ export function saveBackups(entries: BackupEntry[]): void { writeJson('backups.j
 export function addBackupEntry(entry: BackupEntry): void {
   const list = getBackups();
   list.unshift(entry);
-  saveBackups(list.slice(0, 100)); // keep last 100
+  saveBackups(list.slice(0, 100));
 }
 export function deleteBackupEntry(id: string): boolean {
   const list = getBackups();
@@ -185,16 +211,13 @@ export function getRawDataFiles(): { path: string; content: string }[] {
   ];
 }
 
-/** Extract just the repo name from a full GitHub URL or bare name */
 export function extractRepoName(repoInput: string): string {
   if (!repoInput) return '';
-  // Handle: https://github.com/owner/repo.git  or  https://github.com/owner/repo
   try {
     const url = new URL(repoInput);
     const parts = url.pathname.replace(/^\//, '').replace(/\.git$/, '').split('/');
     return parts[parts.length - 1] || repoInput;
   } catch {
-    // Not a URL — might be "owner/repo" or just "repo"
     const parts = repoInput.replace(/\.git$/, '').split('/');
     return parts[parts.length - 1] || repoInput;
   }

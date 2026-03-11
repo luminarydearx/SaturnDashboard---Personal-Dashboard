@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       files,
       message,
       branch,
-      token
+      // token dari body diabaikan karena kita paksa pakai ENV
     } = body;
 
     // Parse repo
@@ -53,21 +53,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Ambil token
-    const settings = getSettings();
-    // Env var takes priority (always available on Vercel), fallback to DB settings
-    const githubToken = process.env.GITHUB_TOKEN || settings.githubToken || token;
+    // ── FIX: PAKSA AMBIL TOKEN DARI ENVIRONMENT VARIABLE SAJA ────────────
+    // Token dari UI/Settings (settings.githubToken) TIDAK AKAN DIPAKAI di sini.
+    // Ini menjamin production selalu pakai token yang aman di Vercel Dashboard.
+    const githubToken = process.env.GITHUB_TOKEN;
     
     if (!githubToken) {
-      console.error('[GitHub Push API] No GitHub token configured');
+      console.error('[GitHub Push API] CRITICAL: GITHUB_TOKEN environment variable is missing!');
       return NextResponse.json(
-        { success: false, error: 'GitHub token not configured' }, 
-        { status: 400 }
+        { 
+          success: false, 
+          error: 'Server configuration error: GITHUB_TOKEN not set in Environment Variables.',
+          hint: 'Please add GITHUB_TOKEN to your Vercel Project Settings > Environment Variables.'
+        }, 
+        { status: 500 }
       );
     }
 
     const targetBranch = branch || 'master';
-    console.log(`[GitHub Push API] Pushing to ${repoOwner}/${repoName}#${targetBranch}`);
+    console.log(`[GitHub Push API] Pushing to ${repoOwner}/${repoName}#${targetBranch} (Token source: ENV)`);
 
     // Execute push
     const result = await pushToGithub({
@@ -81,10 +85,11 @@ export async function POST(req: NextRequest) {
 
     console.log('[GitHub Push API] Result:', result);
 
-    // Update settings
+    // Update metadata settings (tapi JANGAN update githubToken di file settings)
+    const currentSettings = getSettings();
     saveSettings({ 
-      ...settings, 
-      githubToken, 
+      ...currentSettings, 
+      // githubToken: githubToken, <--- JANGAN SIMPAN TOKEN KE FILE DEMI KEAMANAN
       githubOwner: repoOwner, 
       githubRepo: repoName, 
       lastPush: new Date().toISOString() 
