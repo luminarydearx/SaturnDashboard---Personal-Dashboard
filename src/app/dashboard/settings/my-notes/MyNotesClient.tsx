@@ -184,18 +184,18 @@ export default function MyNotesClient({ user, initialNotes, highlightId }: Props
         />
       )}
 
-      {/* Delete confirm */}
-      {deleteTarget && (
-        <ConfirmModal
-          open
-          title="Delete Note"
-          message={`Delete "${deleteTarget.title}"? This cannot be undone.`}
-          confirmLabel="Delete"
-          danger
-          onConfirm={handleDelete}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
+      {/* Delete confirm ── FIX: Sesuaikan prop dengan ConfirmModalProps ── */}
+{deleteTarget && (
+  <ConfirmModal
+    isOpen={!!deleteTarget}           // ✅ 'isOpen' bukan 'open'
+    title="Delete Note"
+    message={`Delete "${deleteTarget.title}"? This cannot be undone.`}
+    confirmText="Delete"              // ✅ 'confirmText' bukan 'confirmLabel'
+    type="danger"                     // ✅ 'type="danger"' bukan 'danger={true}'
+    onConfirm={handleDelete}
+    onCancel={() => setDeleteTarget(null)}
+  />
+)}
     </div>
   );
 }

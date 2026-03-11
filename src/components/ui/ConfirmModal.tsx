@@ -6,15 +6,15 @@ import { createPortal } from "react-dom";
 import { MdWarning, MdInfo, MdCheckCircle } from "react-icons/md";
 
 interface ConfirmModalProps {
-  isOpen: boolean;
-  title: string;
-  message: string;
-  confirmText?: string;
-  cancelText?: string;
-  type?: "danger" | "warning" | "info" | "success";
-  onConfirm: () => void;
-  onCancel: () => void;
-  isLoading?: boolean;
+  isOpen: boolean;              // ✅ Wajib
+  title: string;                // ✅ Wajib
+  message: string;              // ✅ Wajib
+  confirmText?: string;         // ✅ Opsional (default: "Confirm")
+  cancelText?: string;          // ✅ Opsional (default: "Cancel")
+  type?: "danger" | "warning" | "info" | "success";  // ✅ Opsional (default: "danger")
+  onConfirm: () => void;        // ✅ Wajib
+  onCancel: () => void;         // ✅ Wajib
+  isLoading?: boolean;          // ✅ Opsional
 }
 
 const ICONS = { danger: MdWarning, warning: MdWarning, info: MdInfo, success: MdCheckCircle };
