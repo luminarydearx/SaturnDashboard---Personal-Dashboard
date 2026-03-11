@@ -95,12 +95,27 @@ export function purgeDoneNotes(): number {
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────
+export interface AutogenSchedule {
+  lockdownEnabled: boolean;
+  lockdownAt: string;       // ISO datetime
+  lockdownReason: string;
+  lockdownMediaUrl: string; // optional Cloudinary URL
+  unlockEnabled: boolean;
+  unlockAt: string;         // ISO datetime
+}
+
 export interface Settings {
   githubToken: string;
   githubRepo: string;
   githubOwner: string;
   lastPush: string;
+  autogenSchedule?: AutogenSchedule;
 }
+
+const DEFAULT_SCHEDULE: AutogenSchedule = {
+  lockdownEnabled: false, lockdownAt: '', lockdownReason: '', lockdownMediaUrl: '',
+  unlockEnabled: false, unlockAt: '',
+};
 
 export function getSettings(): Settings {
   return readJson<Settings>('settings.json', {
@@ -109,6 +124,12 @@ export function getSettings(): Settings {
 }
 export function saveSettings(settings: Settings): void {
   writeJson('settings.json', settings);
+}
+export function getAutogenSchedule(): AutogenSchedule {
+  return getSettings().autogenSchedule ?? DEFAULT_SCHEDULE;
+}
+export function saveAutogenSchedule(schedule: AutogenSchedule): void {
+  saveSettings({ ...getSettings(), autogenSchedule: schedule });
 }
 
 // ── Backups registry ──────────────────────────────────────────────────────

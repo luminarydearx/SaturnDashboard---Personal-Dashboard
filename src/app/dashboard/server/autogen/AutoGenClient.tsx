@@ -1,706 +1,316 @@
 'use client';
-
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { PublicUser } from '@/types';
 import { useToast } from '@/components/ui/Toast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import {
-  MdCode, MdOpenInNew, MdFolderOpen, MdLock, MdLockOpen,
-  MdPlayArrow, MdStop, MdRefresh, MdChevronRight, MdExpandMore,
-  MdInsertDriveFile, MdFolder, MdSave, MdClose, MdWarning,
-  MdCheckCircle, MdVisibility, MdVisibilityOff,
+  MdCode, MdLock, MdLockOpen, MdRefresh,
+  MdWarning, MdCheckCircle,
+  MdSettings, MdSchedule, MdUpload, MdClose, MdImage, MdVideoLibrary,
+  MdCalendarToday, MdOpenInNew, MdInfo, MdPlayArrow, MdStop, MdVisibility
 } from 'react-icons/md';
 import { SiGithub } from 'react-icons/si';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ── Constants ─────────────────────────────────────────────────────────────
-const AUTOGEN_URL = 'https://auto-generator-app.vercel.app'; // Ganti dengan URL Anda
-const AUTOGEN_GITHUB = 'https://github.com/luminarydearx/SaturnDashboard---Personal-Dashboard';
-const AUTOGEN_REPO_OWNER = 'luminarydearx';
-const AUTOGEN_REPO_NAME  = 'SaturnDashboard---Personal-Dashboard';
-const GITHUB_TOKEN       = process.env.NEXT_PUBLIC_GITHUB_TOKEN || '';
-const FALLBACK_BRANCH    = 'main';
+const AUTOGEN_URL          = 'https://auto-generator-app.vercel.app'; // Ganti dengan URL deploy Anda
+const AUTOGEN_REPO_OWNER   = process.env.NEXT_PUBLIC_GITHUB_OWNER   || 'luminarydearx';
+const AUTOGEN_REPO_NAME    = process.env.NEXT_PUBLIC_GITHUB_REPO    || 'SaturnDashboard---Personal-Dashboard';
+const AUTOGEN_PROJECT_PATH = process.env.NEXT_PUBLIC_AUTOGEN_PROJECT_PATH || 'project/AutoGen';
+const BRANCH               = 'master';
+const CLOUD_NAME           = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME    || 'dg3awuzug';
+const UPLOAD_PRESET        = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
 
-// ── AutoGen Project Path ──────────────────────────────────────────────────
-const AUTOGEN_PROJECT_PATH = 'project/AutoGen';
+// Helper: ensure path is prefixed with project/AutoGen/
+function autoGenPath(filePath: string): string {
+  const base = AUTOGEN_PROJECT_PATH.replace(/\/$/, '');
+  const fp   = filePath.replace(/^\//, '');
+  if (fp.startsWith(base)) return fp;
+  return `${base}/${fp}`;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────
-interface FileNode {
-  name: string;
-  path: string;
-  relativePath: string;
-  type: 'file' | 'dir';
-  content?: string;
-  children?: FileNode[];
+interface Schedule {
+  lockdownEnabled: boolean; lockdownAt: string;
+  lockdownReason: string; lockdownMediaUrl: string;
+  unlockEnabled: boolean; unlockAt: string;
+}
+interface LockdownData {
+  active: boolean; reason: string; timestamp: string; mediaUrl?: string;
 }
 
-// ── Language detection ────────────────────────────────────────────────────
-function getLang(filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase() || '';
-  const map: Record<string, string> = {
-    ts:'typescript', tsx:'tsx', js:'javascript', jsx:'jsx',
-    css:'css', html:'html', json:'json', md:'markdown',
-    yml:'yaml', yaml:'yaml', sh:'bash', env:'bash',
-  };
-  return map[ext] || 'text';
-}
-
-// ── Syntax highlighter ────────────────────────────────────────────────────
-function highlight(code: string, lang: string): string {
-  let c = code;
-  
-  if (lang === 'json') {
-    c = c
-      .replace(/("(?:[^"\\]|\\.)*")(\s*:)/g, '<span class="hl-key">$1</span>$2')
-      .replace(/:\s*("(?:[^"\\]|\\.)*")/g, ': <span class="hl-str">$1</span>')
-      .replace(/:\s*(true|false|null)/g, ': <span class="hl-kw">$1</span>')
-      .replace(/:\s*(-?\d+\.?\d*)/g, ': <span class="hl-num">$1</span>');
-  } else if (['js','javascript','ts','typescript','jsx','tsx'].includes(lang)) {
-    c = c
-      .replace(/(\/\/.*$)/gm, '<span class="hl-comment">$1</span>')
-      .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="hl-comment">$1</span>')
-      .replace(/\b(import|export|from|const|let|var|function|class|return|if|else|for|while|async|await|new|this|typeof|default|extends|interface|type|enum)\b/g, '<span class="hl-kw">$1</span>')
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g, '<span class="hl-str">$1</span>')
-      .replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-num">$1</span>');
-  } else if (lang === 'css') {
-    c = c
-      .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="hl-comment">$1</span>')
-      .replace(/([.#][\w-]+|:[\w-]+|\*|\w+(?=\s*\{))/g, '<span class="hl-sel">$1</span>')
-      .replace(/([\w-]+)(\s*:)/g, '<span class="hl-prop">$1</span>$2')
-      .replace(/:\s*([^;{]+)/g, ': <span class="hl-str">$1</span>');
-  } else if (lang === 'html') {
-    c = c
-      .replace(/(<!--[\s\S]*?-->)/g, '<span class="hl-comment">$1</span>')
-      .replace(/(<\/?)([\w-]+)/g, '$1<span class="hl-kw">$2</span>')
-      .replace(/([\w-]+)(=)("(?:[^"\\]|\\.)*")/g, '<span class="hl-prop">$1</span>$2<span class="hl-str">$3</span>');
-  }
-  
-  c = c.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  
-  return c;
-}
-
-// ── File tree node ────────────────────────────────────────────────────────
-function TreeNode({ node, onSelect, selected, depth = 0 }: {
-  node: FileNode; onSelect: (n: FileNode) => void;
-  selected: string; depth?: number;
-}) {
-  const [open, setOpen] = useState(depth < 2);
-  const isDir = node.type === 'dir';
-  const isActive = selected === node.path;
-
-  if (isDir) {
-    return (
-      <div>
-        <button onClick={() => setOpen(p => !p)}
-          className="w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-left hover:bg-white/5 transition-colors text-xs group"
-          style={{ paddingLeft: `${8 + depth * 12}px` }}>
-          {open ? <MdExpandMore size={12} className="text-[var(--c-muted)] flex-shrink-0" />
-                : <MdChevronRight size={12} className="text-[var(--c-muted)] flex-shrink-0" />}
-          <MdFolder size={13} className="text-amber-400 flex-shrink-0" />
-          <span className="text-[var(--c-text)] truncate font-medium">{node.name}</span>
-        </button>
-        {open && node.children?.map(ch => (
-          <TreeNode key={ch.path} node={ch} onSelect={onSelect} selected={selected} depth={depth + 1} />
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <button onClick={() => onSelect(node)}
-      className="w-full flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-left transition-colors text-xs"
-      style={{
-        paddingLeft: `${8 + depth * 12}px`,
-        background: isActive ? 'rgba(var(--c-accent-rgb),0.15)' : 'transparent',
-        color: isActive ? 'var(--c-accent)' : 'var(--c-muted)',
-      }}>
-      <MdInsertDriveFile size={12} className="flex-shrink-0" />
-      <span className="truncate" title={node.relativePath}>{node.name}</span>
-    </button>
-  );
-}
-
-// ── Code editor / viewer ──────────────────────────────────────────────────
-function CodePane({ file, onChange, readOnly }: {
-  file: FileNode | null;
-  onChange: (content: string) => void;
-  readOnly?: boolean;
-}) {
-  const taRef = useRef<HTMLTextAreaElement>(null);
-  const preRef = useRef<HTMLPreElement>(null);
-  const [code, setCode] = useState('');
-
-  useEffect(() => {
-    if (file?.content !== undefined) setCode(file.content);
-  }, [file]);
-
-  const syncScroll = () => {
-    if (taRef.current && preRef.current) {
-      preRef.current.scrollTop  = taRef.current.scrollTop;
-      preRef.current.scrollLeft = taRef.current.scrollLeft;
-    }
-  };
-
-  if (!file) return (
-    <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--c-bg)' }}>
-      <div className="text-center">
-        <MdCode size={40} className="text-[var(--c-muted)] opacity-20 mx-auto mb-3" />
-        <p className="text-[var(--c-muted)] text-sm">Select a file to view its code</p>
-      </div>
-    </div>
-  );
-
-  const lang = getLang(file.name);
-  const highlighted = highlight(code, lang);
-  const lines = code.split('\n');
-
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#0d0d1a' }}>
-      {/* File header */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b flex-shrink-0"
-        style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface)' }}>
-        <MdInsertDriveFile size={14} style={{ color: 'var(--c-accent)' }} />
-        <span className="text-[var(--c-text)] text-xs font-mono flex-1 truncate" title={file.relativePath}>
-          {file.relativePath}
-        </span>
-        <span className="text-[var(--c-muted)] text-[10px] font-mono uppercase">{lang}</span>
-        <span className="text-[var(--c-muted)] text-[10px]">{lines.length} lines</span>
-      </div>
-      {/* Editor */}
-      <div className="flex-1 overflow-hidden relative font-mono text-xs" style={{ lineHeight: '1.6' }}>
-        {/* Line numbers */}
-        <div className="absolute left-0 top-0 bottom-0 w-10 flex flex-col overflow-hidden pointer-events-none"
-          style={{ background: '#080812', borderRight: '1px solid rgba(255,255,255,0.05)', zIndex: 1 }}>
-          <div className="overflow-hidden h-full">
-            {lines.map((_, i) => (
-              <div key={i} className="text-right pr-2 select-none leading-6"
-                style={{ color: 'rgba(100,116,139,0.5)', fontSize: 11 }}>{i + 1}</div>
-            ))}
-          </div>
-        </div>
-        {/* Highlighted overlay */}
-        <pre ref={preRef}
-          className="absolute inset-0 overflow-auto"
-          style={{
-            margin: 0, padding: '0 16px', paddingLeft: '52px', background: 'transparent',
-            fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: 12, lineHeight: '1.6',
-            pointerEvents: 'none', whiteSpace: 'pre', color: '#c9d1d9', zIndex: 2,
-          }}
-          dangerouslySetInnerHTML={{ __html: highlighted }} />
-        {/* Textarea (editing) */}
-        {!readOnly && (
-          <textarea ref={taRef}
-            value={code}
-            onChange={e => { setCode(e.target.value); onChange(e.target.value); }}
-            onScroll={syncScroll}
-            spellCheck={false}
-            className="absolute inset-0 overflow-auto resize-none focus:outline-none"
-            style={{
-              margin: 0, padding: '0 16px', paddingLeft: '52px', background: 'transparent',
-              fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: 12, lineHeight: '1.6',
-              color: 'transparent', caretColor: '#7c3aed', border: 'none', zIndex: 3,
-              whiteSpace: 'pre',
-            }} />
-        )}
-      </div>
-      <style>{`
-        .hl-kw      { color: #ff7b72; }
-        .hl-str     { color: #a5d6ff; }
-        .hl-comment { color: #8b949e; font-style: italic; }
-        .hl-num     { color: #79c0ff; }
-        .hl-key     { color: #e3b341; }
-        .hl-prop    { color: #79c0ff; }
-        .hl-sel     { color: #f0883e; }
-      `}</style>
-    </div>
-  );
-}
-
-// ── Main component ─────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────
 interface Props { user: PublicUser }
 
+const DEFAULT_SCHEDULE: Schedule = { 
+  lockdownEnabled:false, lockdownAt:'', lockdownReason:'', lockdownMediaUrl:'', 
+  unlockEnabled:false, unlockAt:'' 
+};
+
 export default function AutoGenClient({ user }: Props) {
-  const [tab,             setTab]             = useState<'preview'|'source'|'editor'>('preview');
-  const [iframeKey,       setIframeKey]       = useState(0);
-  const [showIframe,      setShowIframe]      = useState(false);
-  const [lockdownActive,  setLockdownActive]  = useState(false);
-  const [lockdownReason,  setLockdownReason]  = useState('');
+  // Ubah default tab menjadi 'preview'
+  const [tab, setTab]                     = useState<'preview'|'settings'>('preview');
+  
+  const [lockdownActive, setLockdownActive] = useState(false);
+  const [lockdownLoading, setLockdownLoading] = useState(false);
+  const [lockdownReason, setLockdownReason]   = useState('');
   const [showLockConfirm, setShowLockConfirm] = useState(false);
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
-  const [lockdownLoading, setLockdownLoading] = useState(false);
-  const [fileTree,        setFileTree]        = useState<FileNode[]>([]);
-  const [selectedFile,    setSelectedFile]    = useState<FileNode | null>(null);
-  const [editedContent,   setEditedContent]   = useState<string>('');
-  const [saveLoading,     setSaveLoading]     = useState(false);
-  const [treeLoading,     setTreeLoading]     = useState(false);
-  const [pushing,         setPushing]         = useState(false);
-  const [pushStatus,      setPushStatus]      = useState<string>('');
-  const [defaultBranch,   setDefaultBranch]   = useState<string>('');
-  const [branchLoading,   setBranchLoading]   = useState(true);
+  const [pushing, setPushing]               = useState(false);
+  const [pushStatus, setPushStatus]         = useState('');
   
-  const { success, error: toastErr, info } = useToast();
+  const [schedule, setSchedule]             = useState<Schedule>(DEFAULT_SCHEDULE);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleSaved, setScheduleSaved]   = useState(false);
+  
+  const [mediaFile, setMediaFile]           = useState<File|null>(null);
+  const [mediaPreview, setMediaPreview]     = useState('');
+  const [mediaUrl, setMediaUrl]             = useState('');
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const mediaInputRef                       = useRef<HTMLInputElement>(null);
+  
+  const [iframeKey, setIframeKey]           = useState(0);
+  const [showIframe, setShowIframe]         = useState(false);
 
-  // Fetch default branch from GitHub API
-  const fetchDefaultBranch = useCallback(async () => {
-    try {
-      const headers: HeadersInit = { 'Accept': 'application/vnd.github.v3+json' };
-      if (GITHUB_TOKEN) {
-        headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
-      }
+  const { success, error: toastErr, info }  = useToast();
 
-      const res = await fetch(`https://api.github.com/repos/${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}`, {
-        headers
-      });
-      
-      if (!res.ok) {
-        const errData = await res.json();
-        console.error('Failed to fetch repo info:', errData);
-        throw new Error(errData.message || 'Repo not found');
-      }
-
-      const data = await res.json();
-      if (data?.default_branch) {
-        setDefaultBranch(data.default_branch);
-        console.log('✅ Detected default branch:', data.default_branch);
-      } else {
-        setDefaultBranch(FALLBACK_BRANCH);
-      }
-    } catch (err: any) {
-      console.error('Error detecting branch:', err);
-      toastErr(`Failed to detect branch: ${err.message}`);
-      setDefaultBranch(FALLBACK_BRANCH);
-    } finally {
-      setBranchLoading(false);
-    }
+  // ── On mount: load status + schedule ──────────────────────────────────
+  useEffect(() => {
+    fetch(`${AUTOGEN_URL}/lockdown.json?t=${Date.now()}`, { cache:'no-store' })
+      .then(r => r.json())
+      .then((d: LockdownData) => {
+        setLockdownActive(!!d?.active);
+        if (d?.active && d.reason) setLockdownReason(d.reason);
+        if (d?.mediaUrl) setMediaUrl(d.mediaUrl);
+      })
+      .catch(() => {});
+    
+    fetch('/api/autogen/schedule', { cache:'no-store' })
+      .then(r => r.json())
+      .then((s: any) => { if (s && !s.error) setSchedule(s as Schedule); })
+      .catch(() => {});
   }, []);
 
-  // Check lockdown status on mount
+  // ── Schedule poll every 60s ────────────────────────────────────────────
   useEffect(() => {
-    fetch(`${AUTOGEN_URL}/lockdown.json`, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(d => { if (d?.active) { setLockdownActive(true); setLockdownReason(d.reason || ''); } })
-      .catch(() => {});
-    fetchDefaultBranch();
-  }, [fetchDefaultBranch]);
-
-  // Load file tree from GitHub API
-  const loadTree = useCallback(async () => {
-    if (branchLoading || !defaultBranch) return;
-    
-    setTreeLoading(true);
-    try {
-      const headers: HeadersInit = { 'Accept': 'application/vnd.github.v3+json' };
-      if (GITHUB_TOKEN) {
-        headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
-      }
-
-      const res = await fetch(
-        `https://api.github.com/repos/${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}/git/trees/${defaultBranch}?recursive=1`,
-        { headers }
-      );
-      
-      const data = await res.json();
-      
-      if (!res.ok) {
-        console.error('GitHub API Error:', data);
-        toastErr(`Failed to load tree: ${data.message || 'Unknown error'}`);
-        return;
-      }
-
-      if (!data.tree) { 
-        toastErr('Invalid response from GitHub'); 
-        return; 
-      }
-
-      // ── DEBUG: Log semua path yang ada ───────────────────────────────
-      console.log('📁 Total items from GitHub:', data.tree.length);
-      console.log('🔍 Looking for path:', AUTOGEN_PROJECT_PATH);
-      
-      // Cari path yang mengandung "AutoGen" atau "project"
-      const autoGenPaths = data.tree
-        .filter((item: any) => 
-          item.path.includes('AutoGen') || item.path.includes('project')
-        )
-        .map((item: any) => item.path)
-        .slice(0, 20);
-      
-      console.log('🎯 Paths yang mengandung AutoGen/project:', autoGenPaths);
-      // ─────────────────────────────────────────────────────────────────
-
-      const root: Record<string, FileNode> = {};
-      const tree: FileNode[] = [];
-
-      for (const item of data.tree) {
-        const parts = item.path.split('/');
-        
-        // Skip folder yang tidak relevan
-        if (parts.some((p: string) => 
-          p === 'node_modules' || p === '.git' || p === '.vercel' || 
-          p === '.next' || p === 'dist' || p === 'build' || p === '.vscode'
-        )) continue;
-        
-        if (item.type === 'blob') {
-          const node: FileNode = { 
-            name: parts[parts.length - 1], 
-            path: item.path, 
-            relativePath: item.path,
-            type: 'file', 
-            content: '' 
-          };
-          root[item.path] = node;
-        } else if (item.type === 'tree') {
-          const node: FileNode = { 
-            name: parts[parts.length - 1], 
-            path: item.path, 
-            relativePath: item.path,
-            type: 'dir', 
-            children: [] 
-          };
-          root[item.path] = node;
+    const check = () => {
+      const now = Date.now();
+      if (schedule.lockdownEnabled && schedule.lockdownAt && !lockdownActive) {
+        if (now >= new Date(schedule.lockdownAt).getTime()) {
+          executeLockdown(schedule.lockdownReason, schedule.lockdownMediaUrl, true);
         }
       }
-
-      // Build parent-child relationships
-      for (const [path, node] of Object.entries(root)) {
-        const parts = path.split('/');
-        if (parts.length === 1) { tree.push(node); continue; }
-        const parentPath = parts.slice(0, -1).join('/');
-        if (root[parentPath]) {
-          root[parentPath].children = root[parentPath].children || [];
-          root[parentPath].children!.push(node);
-        } else {
-          tree.push(node);
+      if (schedule.unlockEnabled && schedule.unlockAt && lockdownActive) {
+        if (now >= new Date(schedule.unlockAt).getTime()) {
+          executeUnlock(true);
         }
       }
+    };
+    check();
+    const iv = setInterval(check, 60_000);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedule, lockdownActive]);
 
-      // ── IMPROVED FILTER: Lebih fleksibel ─────────────────────────────
-      const possiblePaths = [
-        AUTOGEN_PROJECT_PATH,
-        'project/AutoGen',
-        'project/autogen',
-        'AutoGen',
-        'autogen',
-        'src',
-        'app'
-      ];
-      
-      let filteredTree: FileNode[] = [];
-      
-      for (const targetPath of possiblePaths) {
-        const found = tree.filter(node => {
-          if (node.path === targetPath) return true;
-          if (node.path.startsWith(targetPath + '/')) return true;
-          return false;
-        });
-        
-        if (found.length > 0) {
-          console.log(`✅ Found files in path: "${targetPath}" (${found.length} items)`);
-          
-          // Buat relative path
-          filteredTree = found.map(node => {
-            const relativePath = node.path.replace(targetPath + '/', '');
-            return {
-              ...node,
-              relativePath: relativePath || node.name,
-              children: node.children ? node.children.map(child => ({
-                ...child,
-                relativePath: child.path.replace(targetPath + '/', '')
-              })) : undefined
-            };
-          });
-          
-          setFileTree(filteredTree.sort((a, b) => {
-            if (a.type === b.type) return a.name.localeCompare(b.name);
-            return a.type === 'dir' ? -1 : 1;
-          }));
-          
-          console.log('✅ AutoGen file tree loaded:', filteredTree.length, 'items');
-          info(`Loaded ${filteredTree.length} files from ${targetPath}`);
-          setTreeLoading(false);
-          return;
-        }
-      }
-      
-      // ── FALLBACK: Jika tidak ada yang cocok, tampilkan root ──────────
-      console.warn('⚠️ No matching path found. Showing root directory.');
-      setFileTree(tree.slice(0, 50).sort((a, b) => {
-        if (a.type === b.type) return a.name.localeCompare(b.name);
-        return a.type === 'dir' ? -1 : 1;
-      }));
-      info('Showing root directory (AutoGen path not found)');
-    } catch (err) { 
-      console.error('Failed to fetch file tree:', err);
-      toastErr('Failed to fetch file tree'); 
-    } finally { 
-      setTreeLoading(false); 
-    }
-  }, [defaultBranch, branchLoading]);
-
-  useEffect(() => {
-    if ((tab === 'source' || tab === 'editor') && !branchLoading && defaultBranch) {
-      loadTree();
-    }
-  }, [tab, loadTree, branchLoading, defaultBranch]);
-
-  const loadFileContent = async (node: FileNode) => {
-    if (!defaultBranch || node.type === 'dir') return;
-    
-    if (node.content !== '' && node.content !== undefined) {
-      setSelectedFile(node);
-      setEditedContent(node.content || '');
-      return;
-    }
-    try {
-      const headers: HeadersInit = {};
-      if (GITHUB_TOKEN) {
-        headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
-      }
-
-      const res = await fetch(
-        `https://raw.githubusercontent.com/${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}/${defaultBranch}/${node.path}`,
-        { headers }
-      );
-      
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      
-      const text = await res.text();
-      const updated = { ...node, content: text };
-      setSelectedFile(updated);
-      setEditedContent(text);
-      setFileTree(prev => updateNodeContent(prev, node.path, text));
-    } catch (err) { 
-      console.error('Failed to load file:', err);
-      toastErr('Failed to load file'); 
-    }
-  };
-
-  function updateNodeContent(nodes: FileNode[], path: string, content: string): FileNode[] {
-    return nodes.map(n => {
-      if (n.path === path) return { ...n, content };
-      if (n.children) return { ...n, children: updateNodeContent(n.children, path, content) };
-      return n;
-    });
-  }
-
-  // Push to GitHub via API route
-  const pushToGitHub = async (files: { path: string; content: string }[], message: string) => {
-    if (!defaultBranch) {
-      toastErr('Branch not detected yet. Please wait...');
-      return;
-    }
-    
-    setPushing(true);
-    setPushStatus('Pushing to GitHub…');
+  // ── Push via server API ────────────────────────────────────────────────
+  const pushToGitHub = async (files: {path:string;content:string}[], message: string): Promise<boolean> => {
+    setPushing(true); setPushStatus('Pushing to GitHub…');
     try {
       const res = await fetch('/api/github/push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repo: `${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}`,
-          files,
-          message,
-          branch: defaultBranch,
-        }),
+        method: 'POST', headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ owner:AUTOGEN_REPO_OWNER, repo:AUTOGEN_REPO_NAME, branch:BRANCH, files, message }),
       });
       const d = await res.json();
-      if (d.success) {
-        setPushStatus('✓ Pushed successfully');
-        success('Pushed to GitHub! Vercel will deploy in ~30s');
-      } else {
-        throw new Error(d.error || 'Push failed');
+      if (d.success) { 
+        setPushStatus('✓ Pushed — Vercel deploying…'); 
+        success('Pushed! Vercel deploying in ~30s'); 
+        setTimeout(()=>setPushStatus(''),5000); 
+        return true; 
       }
+      throw new Error(d.error||d.message||'Push failed');
     } catch (err: any) {
-      console.error('Push error:', err);
-      toastErr(err.message);
-      setPushStatus('Push failed');
-    } finally { 
-      setPushing(false); 
-      setTimeout(() => setPushStatus(''), 4000); 
-    }
+      toastErr(err.message||'Push failed'); 
+      setPushStatus('✗ Push failed'); 
+      setTimeout(()=>setPushStatus(''),4000); 
+      return false;
+    } finally { setPushing(false); }
   };
 
-  const handleLockdown = async () => {
-    if (!defaultBranch) {
-      toastErr('Branch not detected yet. Please wait...');
-      return;
-    }
-    
-    setShowLockConfirm(false);
+  // ── Cloudinary upload ──────────────────────────────────────────────────
+  const uploadMedia = async (file: File): Promise<string> => {
+    setUploadingMedia(true);
+    try {
+      const fd = new FormData(); fd.append('file',file); fd.append('upload_preset',UPLOAD_PRESET);
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`,{method:'POST',body:fd});
+      if (!res.ok) throw new Error('Cloudinary upload failed');
+      return (await res.json()).secure_url as string;
+    } finally { setUploadingMedia(false); }
+  };
+
+  const handleMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setMediaFile(file); setMediaUrl('');
+    const r = new FileReader(); r.onload = ev => setMediaPreview(ev.target?.result as string); r.readAsDataURL(file);
+  };
+
+  const removeMedia = () => { setMediaFile(null); setMediaPreview(''); setMediaUrl(''); if(mediaInputRef.current) mediaInputRef.current.value=''; };
+
+  // ── Execute lockdown ───────────────────────────────────────────────────
+  const executeLockdown = async (reason: string, existingMedia='', fromSchedule=false) => {
     setLockdownLoading(true);
     try {
-      const lockdownData = JSON.stringify({ 
-        active: true, 
-        reason: lockdownReason, 
-        timestamp: new Date().toISOString() 
-      }, null, 2);
-
-      await pushToGitHub([
-        { path: 'public/lockdown.json', content: lockdownData },
-      ], `🔒 Saturn Dashboard: Lockdown Mode activated — ${lockdownReason || 'No reason given'}`);
-      setLockdownActive(true);
-    } catch (err: any) {
-      toastErr(err.message);
-    } finally { 
-      setLockdownLoading(false); 
-    }
+      let finalMedia = existingMedia || (mediaUrl && !mediaFile ? mediaUrl : '');
+      if (mediaFile && !mediaUrl) {
+        try { finalMedia = await uploadMedia(mediaFile); setMediaUrl(finalMedia); }
+        catch { toastErr('Media upload gagal — lanjut tanpa media'); }
+      }
+      const data: LockdownData = { active:true, reason:reason||'', timestamp:new Date().toISOString(), ...(finalMedia?{mediaUrl:finalMedia}:{}) };
+      const ok = await pushToGitHub([{ path:autoGenPath('public/lockdown.json'), content:JSON.stringify(data,null,2) }],
+        `🔒 AutoGen: Lockdown${reason?` — ${reason}`:''}`);
+      if (ok) {
+        setLockdownActive(true);
+        if (fromSchedule) {
+          const upd = {...schedule,lockdownEnabled:false};
+          setSchedule(upd);
+          await fetch('/api/autogen/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(upd)});
+        }
+      }
+    } finally { setLockdownLoading(false); }
   };
 
-  const handleUnlockdown = async () => {
-    if (!defaultBranch) {
-      toastErr('Branch not detected yet. Please wait...');
-      return;
-    }
-    
-    setShowUnlockConfirm(false);
+  const executeUnlock = async (fromSchedule=false) => {
     setLockdownLoading(true);
     try {
-      const unlockData = JSON.stringify({ 
-        active: false, 
-        reason: '', 
-        timestamp: new Date().toISOString() 
-      }, null, 2);
-      
-      await pushToGitHub([
-        { path: 'public/lockdown.json', content: unlockData },
-      ], `🔓 Saturn Dashboard: Lockdown Mode deactivated`);
-      setLockdownActive(false);
-      setLockdownReason('');
-    } catch (err: any) {
-      toastErr(err.message);
-    } finally { 
-      setLockdownLoading(false); 
-    }
+      const data: LockdownData = { active:false, reason:'', timestamp:new Date().toISOString() };
+      const ok = await pushToGitHub([{ path:autoGenPath('public/lockdown.json'), content:JSON.stringify(data,null,2) }], '🔓 AutoGen: Lockdown deactivated');
+      if (ok) {
+        setLockdownActive(false); setLockdownReason(''); setMediaUrl(''); setMediaFile(null); setMediaPreview('');
+        if (fromSchedule) {
+          const upd = {...schedule,unlockEnabled:false};
+          setSchedule(upd);
+          await fetch('/api/autogen/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(upd)});
+        }
+      }
+    } finally { setLockdownLoading(false); }
   };
 
-  const handleSaveFile = async () => {
-    if (!selectedFile || !defaultBranch) return;
-    setSaveLoading(true);
+  const handleLockdown   = () => { setShowLockConfirm(false);   executeLockdown(lockdownReason); };
+  const handleUnlockdown = () => { setShowUnlockConfirm(false); executeUnlock(); };
+
+  // ── Save schedule ──────────────────────────────────────────────────────
+  const saveSchedule = async () => {
+    setScheduleLoading(true);
     try {
-      await pushToGitHub([
-        { path: selectedFile.path, content: editedContent }
-      ], `✏️ AutoGen: Edit ${selectedFile.relativePath}`);
-      setFileTree(prev => updateNodeContent(prev, selectedFile.path, editedContent));
-      setSelectedFile({ ...selectedFile, content: editedContent });
-    } finally { 
-      setSaveLoading(false); 
-    }
+      const res = await fetch('/api/autogen/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(schedule)});
+      const d = await res.json();
+      if (d.success) { setScheduleSaved(true); setTimeout(()=>setScheduleSaved(false),2500); }
+      else throw new Error(d.error||'Failed');
+    } catch(err:any) { toastErr(err.message); } finally { setScheduleLoading(false); }
   };
+
+  const isVideo = (u:string) => /\.(mp4|webm|mov|avi)(\?|$)/i.test(u);
+  const fmtTime = (iso:string) => { try { return new Date(iso).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); } catch { return iso; } };
 
   return (
-    <div className="h-full flex flex-col" style={{ minHeight: '80vh' }}>
-      {/* ── Header ─ */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 flex-shrink-0">
+    <div className="flex flex-col gap-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, rgba(var(--c-accent-rgb),0.3), rgba(var(--c-accent2-rgb),0.2))', border: '1px solid rgba(var(--c-accent-rgb),0.2)' }}>
-            <MdCode size={24} style={{ color: 'var(--c-accent)' }} />
+            style={{background:'linear-gradient(135deg,rgba(var(--c-accent-rgb),0.3),rgba(var(--c-accent2-rgb),0.2))',border:'1px solid rgba(var(--c-accent-rgb),0.2)'}}>
+            <MdCode size={24} style={{color:'var(--c-accent)'}}/>
           </div>
           <div>
-            <h1 className="font-orbitron text-2xl font-bold text-[var(--c-text)]">AutoGen Editor</h1>
-            <p className="text-[var(--c-muted)] text-sm">
-              <span className="text-[var(--c-accent)]">project/AutoGen</span>
-              <span className="mx-2">•</span>
-              <a href={AUTOGEN_URL} target="_blank" rel="noreferrer" className="hover:underline">
-                {AUTOGEN_URL.replace('https://', '')}
-              </a>
-            </p>
+            <h1 className="font-orbitron text-2xl font-bold text-[var(--c-text)]">AutoGen Control</h1>
+            <a href={AUTOGEN_URL} target="_blank" rel="noreferrer"
+              className="text-sm hover:underline flex items-center gap-1" style={{color:'var(--c-accent)'}}>
+              {AUTOGEN_URL} <MdOpenInNew size={12}/>
+            </a>
           </div>
         </div>
-
-        {/* Status + Lockdown */}
         <div className="flex items-center gap-3 flex-wrap">
           {pushStatus && (
-            <span className="text-xs px-3 py-1.5 rounded-full font-mono" style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)', color: 'var(--c-muted)' }}>
+            <span className="text-xs px-3 py-1.5 rounded-full font-mono"
+              style={{background:'var(--c-surface)',border:'1px solid var(--c-border)',color:'var(--c-muted)'}}>
               {pushStatus}
             </span>
           )}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-            style={{
-              background: lockdownActive ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)',
-              border: lockdownActive ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(34,197,94,0.3)',
-              color: lockdownActive ? '#f87171' : '#4ade80',
-            }}>
-            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: lockdownActive ? '#f87171' : '#4ade80' }} />
-            {lockdownActive ? 'LOCKDOWN ACTIVE' : 'ONLINE'}
+            style={{background:lockdownActive?'rgba(239,68,68,0.1)':'rgba(34,197,94,0.1)',border:lockdownActive?'1px solid rgba(239,68,68,0.3)':'1px solid rgba(34,197,94,0.3)',color:lockdownActive?'#f87171':'#4ade80'}}>
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{background:lockdownActive?'#f87171':'#4ade80'}}/>
+            {lockdownActive?'LOCKDOWN ACTIVE':'ONLINE'}
           </div>
-
           {lockdownActive ? (
-            <button onClick={() => setShowUnlockConfirm(true)} disabled={lockdownLoading}
+            <button onClick={()=>setShowUnlockConfirm(true)} disabled={lockdownLoading||pushing}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
-              style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ade80' }}>
-              <MdLockOpen size={16} />
-              {lockdownLoading ? 'Processing…' : 'Unlock Site'}
+              style={{background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.3)',color:'#4ade80'}}>
+              <MdLockOpen size={16}/>{(lockdownLoading||pushing)?'Processing…':'Unlock Site'}
             </button>
           ) : (
-            <button onClick={() => setShowLockConfirm(true)} disabled={lockdownLoading}
+            <button onClick={()=>setShowLockConfirm(true)} disabled={lockdownLoading||pushing}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
-              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
-              <MdLock size={16} />
-              {lockdownLoading ? 'Processing…' : 'Lockdown Mode'}
+              style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171'}}>
+              <MdLock size={16}/>{(lockdownLoading||pushing)?'Processing…':'Lockdown Now'}
             </button>
           )}
-
-          <a href={AUTOGEN_GITHUB} target="_blank" rel="noreferrer"
+          <a href={`https://github.com/${AUTOGEN_REPO_OWNER}/${AUTOGEN_REPO_NAME}`} target="_blank" rel="noreferrer"
             className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-[var(--c-muted)] hover:text-[var(--c-text)] transition-colors"
-            style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)' }}>
-            <SiGithub size={15} />
+            style={{background:'var(--c-surface)',border:'1px solid var(--c-border)'}}>
+            <SiGithub size={15}/>
           </a>
         </div>
       </div>
 
-      {/* ── Tab bar ── */}
-      <div className="flex gap-1 mb-4 flex-shrink-0 flex-wrap"
-        style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)', padding: 5, borderRadius: 14 }}>
+      {/* Tabs - Preview & Settings Only */}
+      <div className="flex gap-1"
+        style={{background:'var(--c-surface)',border:'1px solid var(--c-border)',padding:5,borderRadius:14}}>
         {([
-          { id: 'preview', label: 'Preview', icon: MdVisibility },
-          { id: 'source',  label: 'Source',  icon: MdFolderOpen },
-          { id: 'editor',  label: 'Editor',  icon: MdCode },
-        ] as const).map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setTab(id)}
+          {id:'preview', label:'Preview', icon:MdVisibility},
+          {id:'settings', label:'Settings', icon:MdSettings}
+        ] as const).map(({id,label,icon:Icon})=>(
+          <button key={id} onClick={()=>setTab(id)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
-            style={{
-              background: tab === id ? 'var(--c-gradient-r)' : 'transparent',
-              color: tab === id ? '#fff' : 'var(--c-muted)',
-              boxShadow: tab === id ? `0 4px 14px rgba(var(--c-accent-rgb),0.35)` : 'none',
-            }}>
-            <Icon size={15} /> {label}
+            style={{background:tab===id?'var(--c-gradient-r)':'transparent',color:tab===id?'#fff':'var(--c-muted)',boxShadow:tab===id?`0 4px 14px rgba(var(--c-accent-rgb),0.35)`:'none'}}>
+            <Icon size={15}/>{label}
           </button>
         ))}
       </div>
 
-      {/* ── Tab content ── */}
       <AnimatePresence mode="wait">
-        {/* ── Preview tab ── */}
+        {/* ──────── PREVIEW TAB ──────── */}
         {tab === 'preview' && (
-          <motion.div key="preview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="flex-1 rounded-2xl overflow-hidden flex flex-col"
-            style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)', minHeight: 600 }}>
+          <motion.div key="preview" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0}}
+            className="rounded-2xl overflow-hidden flex flex-col"
+            style={{background:'var(--c-surface)',border:'1px solid var(--c-border)',minHeight:600}}>
+            
+            {/* Toolbar */}
             <div className="flex items-center gap-3 px-4 py-3 border-b flex-shrink-0"
-              style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface2)' }}>
+              style={{borderColor:'var(--c-border)',background:'var(--c-surface2)'}}>
               <div className="flex items-center gap-1.5 flex-1 px-3 py-1.5 rounded-lg text-xs font-mono text-[var(--c-muted)]"
-                style={{ background: 'var(--c-bg)', border: '1px solid var(--c-border)' }}>
+                style={{background:'var(--c-bg)',border:'1px solid var(--c-border)'}}>
                 <MdOpenInNew size={12} /> {AUTOGEN_URL.replace('https://', '')}
               </div>
               <button onClick={() => { setShowIframe(true); setIframeKey(p => p+1); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all btn-primary">
-                <MdPlayArrow size={14} /> Preview
+                <MdPlayArrow size={14} /> Load Preview
               </button>
               {showIframe && (
                 <>
                   <button onClick={() => setIframeKey(p => p+1)}
                     className="p-2 rounded-xl text-[var(--c-muted)] hover:text-[var(--c-text)] transition-colors"
-                    style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)' }}>
+                    style={{background:'var(--c-surface)',border:'1px solid var(--c-border)'}}>
                     <MdRefresh size={15} />
                   </button>
                   <button onClick={() => setShowIframe(false)}
                     className="p-2 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors"
-                    style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
+                    style={{border:'1px solid rgba(239,68,68,0.2)'}}>
                     <MdStop size={15} />
                   </button>
                 </>
               )}
             </div>
+
+            {/* Content */}
             {showIframe ? (
               <iframe
                 key={iframeKey}
@@ -713,12 +323,12 @@ export default function AutoGenClient({ user }: Props) {
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20">
                 <div className="w-20 h-20 rounded-3xl flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, rgba(var(--c-accent-rgb),0.2), rgba(var(--c-accent2-rgb),0.1))', border: '1px solid rgba(var(--c-accent-rgb),0.2)' }}>
-                  <MdVisibility size={36} style={{ color: 'var(--c-accent)' }} />
+                  style={{background:'linear-gradient(135deg,rgba(var(--c-accent-rgb),0.2),rgba(var(--c-accent2-rgb),0.1))',border:'1px solid rgba(var(--c-accent-rgb),0.2)'}}>
+                  <MdVisibility size={36} style={{color:'var(--c-accent)'}} />
                 </div>
                 <div className="text-center">
                   <p className="font-orbitron text-lg font-bold text-[var(--c-text)] mb-2">Live Preview</p>
-                  <p className="text-[var(--c-muted)] text-sm">Preview your AutoGen project in realtime</p>
+                  <p className="text-[var(--c-muted)] text-sm">Preview your AutoGen website in realtime</p>
                   <p className="text-[var(--c-muted)] text-xs mt-1 font-mono">{AUTOGEN_URL.replace('https://', '')}</p>
                 </div>
                 <button onClick={() => { setShowIframe(true); setIframeKey(p => p+1); }} className="btn-primary">
@@ -729,91 +339,245 @@ export default function AutoGenClient({ user }: Props) {
           </motion.div>
         )}
 
-        {/* ── Source / Editor tabs ── */}
-        {(tab === 'source' || tab === 'editor') && (
-          <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="flex-1 rounded-2xl overflow-hidden flex flex-col sm:flex-row"
-            style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)', minHeight: 600 }}>
+        {/* ──────── SETTINGS TAB ──────── */}
+        {tab === 'settings' && (
+          <motion.div key="settings" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0}}
+            className="flex flex-col gap-5">
             
-            {/* File tree sidebar */}
-            <div className="w-full sm:w-56 border-b sm:border-b-0 sm:border-r flex flex-col flex-shrink-0"
-              style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface2)', height: '100%', maxHeight: 'none' }}>
-              <div className="flex items-center gap-2 px-3 py-2.5 border-b flex-shrink-0" style={{ borderColor: 'var(--c-border)' }}>
-                <MdFolderOpen size={14} style={{ color: 'var(--c-accent)' }} />
-                <span className="text-[var(--c-text)] text-xs font-semibold flex-1 truncate" title="project/AutoGen">
-                  AutoGen
-                </span>
-                <button onClick={loadTree} disabled={treeLoading || branchLoading} className="p-1 rounded hover:bg-white/5 transition-colors">
-                  <MdRefresh size={13} className={`text-[var(--c-muted)] ${treeLoading || branchLoading ? 'animate-spin' : ''}`} />
-                </button>
+            {/* Info Card */}
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
+              style={{background:'rgba(var(--c-accent-rgb),0.08)',border:'1px solid rgba(var(--c-accent-rgb),0.2)'}}>
+              <MdInfo size={18} className="flex-shrink-0 mt-0.5" style={{color:'var(--c-accent)'}}/>
+              <p className="text-[var(--c-muted)] leading-relaxed font-nunito text-xs">
+                Lockdown bekerja dengan push <code className="text-[var(--c-accent)] font-mono">project/AutoGen/public/lockdown.json</code> ke repo{' '}
+                <strong className="text-[var(--c-text)]">{AUTOGEN_REPO_NAME}</strong> (branch <code className="text-[var(--c-accent)] font-mono">{BRANCH}</code>).
+                Vercel auto-deploy → site terkunci. Berfungsi dari localhost maupun production.
+              </p>
+            </div>
+
+            {/* Lockdown Control */}
+            <div className="rounded-2xl overflow-hidden" style={{background:'var(--c-surface)',border:'1px solid var(--c-border)'}}>
+              <div className="flex items-center gap-3 px-5 py-4 border-b"
+                style={{borderColor:'var(--c-border)',background:'rgba(239,68,68,0.05)'}}>
+                <MdLock size={18} className="text-red-400"/>
+                <h2 className="font-orbitron text-sm font-bold text-[var(--c-text)]">Lockdown Control</h2>
+                {lockdownActive && (
+                  <span className="ml-auto text-xs px-2.5 py-1 rounded-full font-semibold"
+                    style={{background:'rgba(239,68,68,0.15)',color:'#f87171',border:'1px solid rgba(239,68,68,0.3)'}}>
+                    ACTIVE
+                  </span>
+                )}
               </div>
-              <div className="overflow-y-auto flex-1 py-1 px-1">
-                {branchLoading ? (
-                  <p className="text-[var(--c-muted)] text-xs text-center py-6">Detecting branch...</p>
-                ) : treeLoading ? (
-                  [...Array(8)].map((_, i) => (
-                    <div key={i} className="h-5 rounded mb-1 animate-pulse" style={{ background: 'var(--c-border)', margin: '4px 8px' }} />
-                  ))
-                ) : fileTree.length === 0 ? (
-                  <p className="text-[var(--c-muted)] text-xs text-center py-6">No files in project/AutoGen</p>
-                ) : fileTree.map(n => (
-                  <TreeNode key={n.path} node={n} onSelect={loadFileContent} selected={selectedFile?.path || ''} />
-                ))}
+              <div className="p-5 flex flex-col gap-4">
+                {/* Reason */}
+                <div>
+                  <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-2">
+                    Alasan Lockdown <span className="normal-case font-normal">(ditampilkan ke pengunjung)</span>
+                  </label>
+                  <textarea value={lockdownReason} onChange={e=>setLockdownReason(e.target.value)}
+                    placeholder="Contoh: Sedang maintenance, akan kembali segera…"
+                    rows={3} className="saturn-input resize-none w-full focus:outline-none" style={{paddingLeft:16}}/>
+                </div>
+                
+                {/* Media Upload */}
+                <div>
+                  <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-2">
+                    Media Pendukung <span className="normal-case font-normal">(opsional — gambar / video)</span>
+                  </label>
+                  {(mediaPreview||mediaUrl) ? (
+                    <div className="relative rounded-xl overflow-hidden" style={{background:'var(--c-bg)',border:'1px solid var(--c-border)'}}>
+                      {((mediaPreview&&mediaFile?.type.startsWith('video'))||(!mediaPreview&&isVideo(mediaUrl))) ? (
+                        <video src={mediaPreview||mediaUrl} controls className="w-full max-h-48 object-contain"/>
+                      ) : (
+                        <img src={mediaPreview||mediaUrl} alt="media preview" className="w-full max-h-48 object-contain"/>
+                      )}
+                      {mediaUrl&&!mediaFile && (
+                        <div className="absolute bottom-0 left-0 right-0 px-3 py-1.5 text-[10px] font-mono truncate"
+                          style={{background:'rgba(0,0,0,0.7)',color:'#a5d6ff'}}>{mediaUrl}</div>
+                      )}
+                      <button onClick={removeMedia}
+                        className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-white"
+                        style={{background:'rgba(239,68,68,0.8)'}}>
+                        <MdClose size={14}/>
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={()=>mediaInputRef.current?.click()}
+                      className="w-full flex flex-col items-center gap-2 py-8 rounded-xl border-2 border-dashed transition-colors hover:border-[var(--c-accent)]"
+                      style={{borderColor:'var(--c-border)',color:'var(--c-muted)'}}>
+                      <div className="flex items-center gap-3"><MdImage size={24}/><MdVideoLibrary size={24}/></div>
+                      <span className="text-sm font-medium">Klik untuk upload gambar / video</span>
+                      <span className="text-xs opacity-60">JPG, PNG, GIF, MP4, WebM — maks 20MB</span>
+                    </button>
+                  )}
+                  <input ref={mediaInputRef} type="file" className="hidden" accept="image/*,video/*" onChange={handleMediaSelect}/>
+                  {uploadingMedia && (
+                    <div className="flex items-center gap-2 mt-2 text-xs text-[var(--c-muted)]">
+                      <MdRefresh size={13} className="animate-spin"/> Mengupload ke Cloudinary…
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Button */}
+                <div className="pt-1">
+                  {lockdownActive ? (
+                    <button onClick={()=>setShowUnlockConfirm(true)} disabled={lockdownLoading||pushing}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all"
+                      style={{background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.3)',color:'#4ade80'}}>
+                      <MdLockOpen size={16}/>{(lockdownLoading||pushing)?'Memproses…':'🔓 Unlock Sekarang'}
+                    </button>
+                  ) : (
+                    <button onClick={()=>setShowLockConfirm(true)} disabled={lockdownLoading||pushing}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm text-white transition-all"
+                      style={{background:'linear-gradient(135deg,#dc2626,#ef4444)'}}>
+                      <MdLock size={16}/>{(lockdownLoading||pushing)?'Memproses…':'🔒 Aktifkan Lockdown Sekarang'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Code pane */}
-            <div className="flex-1 flex flex-col overflow-hidden" style={{ minHeight: 400 }}>
-              {tab === 'editor' && selectedFile && (
-                <div className="flex items-center justify-end gap-2 px-4 py-2 border-b flex-shrink-0"
-                  style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface)' }}>
-                  <span className="text-[var(--c-muted)] text-xs flex-1 truncate" title={selectedFile.relativePath}>
-                    Edit & push to GitHub
-                  </span>
-                  <button onClick={handleSaveFile} disabled={saveLoading || pushing || !defaultBranch}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold btn-primary">
-                    {saveLoading || pushing
-                      ? <><MdRefresh size={13} className="animate-spin" /> Pushing…</>
-                      : <><MdSave size={13} /> Save & Push</>}
-                  </button>
+            {/* Scheduled Lockdown */}
+            <div className="rounded-2xl overflow-hidden" style={{background:'var(--c-surface)',border:'1px solid var(--c-border)'}}>
+              <div className="flex items-center gap-3 px-5 py-4 border-b"
+                style={{borderColor:'var(--c-border)',background:'rgba(var(--c-accent-rgb),0.04)'}}>
+                <MdSchedule size={18} style={{color:'var(--c-accent)'}}/>
+                <h2 className="font-orbitron text-sm font-bold text-[var(--c-text)]">Jadwal Otomatis</h2>
+              </div>
+              <div className="p-5 flex flex-col gap-6">
+                {/* Lockdown Schedule */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MdLock size={15} className="text-red-400"/>
+                      <span className="text-[var(--c-text)] text-sm font-semibold">Jadwal Lockdown Otomatis</span>
+                    </div>
+                    <button onClick={()=>setSchedule(s=>({...s,lockdownEnabled:!s.lockdownEnabled}))}
+                      className="w-11 h-6 rounded-full transition-all flex-shrink-0 relative"
+                      style={{background:schedule.lockdownEnabled?'var(--c-accent)':'var(--c-border)'}}>
+                      <span className="absolute top-0.5 rounded-full w-5 h-5 bg-white transition-all shadow-sm"
+                        style={{left:schedule.lockdownEnabled?'22px':'2px'}}/>
+                    </button>
+                  </div>
+                  {schedule.lockdownEnabled && (
+                    <div className="flex flex-col gap-3 pl-4 border-l-2" style={{borderColor:'rgba(239,68,68,0.3)'}}>
+                      <div>
+                        <label className="block text-[var(--c-muted)] text-xs font-semibold mb-1.5 uppercase tracking-wider">Waktu Lockdown</label>
+                        <input type="datetime-local"
+                          value={schedule.lockdownAt?schedule.lockdownAt.slice(0,16):''}
+                          onChange={e=>setSchedule(s=>({...s,lockdownAt:e.target.value?new Date(e.target.value).toISOString():''}))}
+                          className="saturn-input w-full focus:outline-none text-sm" style={{paddingLeft:12}}/>
+                      </div>
+                      <div>
+                        <label className="block text-[var(--c-muted)] text-xs font-semibold mb-1.5 uppercase tracking-wider">Alasan</label>
+                        <input type="text" value={schedule.lockdownReason}
+                          onChange={e=>setSchedule(s=>({...s,lockdownReason:e.target.value}))}
+                          placeholder="Alasan lockdown terjadwal…"
+                          className="saturn-input w-full focus:outline-none text-sm" style={{paddingLeft:12}}/>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-              <CodePane file={selectedFile} onChange={setEditedContent} readOnly={tab === 'source'} />
+
+                {/* Unlock Schedule */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MdLockOpen size={15} className="text-green-400"/>
+                      <span className="text-[var(--c-text)] text-sm font-semibold">Jadwal Unlock Otomatis</span>
+                    </div>
+                    <button onClick={()=>setSchedule(s=>({...s,unlockEnabled:!s.unlockEnabled}))}
+                      className="w-11 h-6 rounded-full transition-all flex-shrink-0 relative"
+                      style={{background:schedule.unlockEnabled?'#22c55e':'var(--c-border)'}}>
+                      <span className="absolute top-0.5 rounded-full w-5 h-5 bg-white transition-all shadow-sm"
+                        style={{left:schedule.unlockEnabled?'22px':'2px'}}/>
+                    </button>
+                  </div>
+                  {schedule.unlockEnabled && (
+                    <div className="flex flex-col gap-3 pl-4 border-l-2" style={{borderColor:'rgba(34,197,94,0.3)'}}>
+                      <div>
+                        <label className="block text-[var(--c-muted)] text-xs font-semibold mb-1.5 uppercase tracking-wider">Waktu Unlock</label>
+                        <input type="datetime-local"
+                          value={schedule.unlockAt?schedule.unlockAt.slice(0,16):''}
+                          onChange={e=>setSchedule(s=>({...s,unlockAt:e.target.value?new Date(e.target.value).toISOString():''}))}
+                          className="saturn-input w-full focus:outline-none text-sm" style={{paddingLeft:12}}/>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Save Button */}
+                <button onClick={saveSchedule} disabled={scheduleLoading}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                  style={{background:scheduleSaved?'rgba(34,197,94,0.1)':'var(--c-gradient-r)',border:scheduleSaved?'1px solid rgba(34,197,94,0.3)':'none',color:scheduleSaved?'#4ade80':'#fff'}}>
+                  {scheduleLoading?<><MdRefresh size={14} className="animate-spin"/> Menyimpan…</>
+                  :scheduleSaved?<><MdCheckCircle size={14}/> Jadwal Disimpan!</>
+                  :<><MdCalendarToday size={14}/> Simpan Jadwal</>}
+                </button>
+
+                {/* Upcoming Events */}
+                {((schedule.lockdownEnabled&&schedule.lockdownAt)||(schedule.unlockEnabled&&schedule.unlockAt)) && (
+                  <div className="rounded-xl p-4 flex flex-col gap-2" style={{background:'var(--c-bg)',border:'1px solid var(--c-border)'}}>
+                    <p className="text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-1">Upcoming Events</p>
+                    {schedule.lockdownEnabled&&schedule.lockdownAt && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-red-400">🔒</span>
+                        <span className="text-[var(--c-text)]">Lockdown:</span>
+                        <span className="font-semibold" style={{color:'var(--c-accent)'}}>{fmtTime(schedule.lockdownAt)}</span>
+                      </div>
+                    )}
+                    {schedule.unlockEnabled&&schedule.unlockAt && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-green-400">🔓</span>
+                        <span className="text-[var(--c-text)]">Unlock:</span>
+                        <span className="font-semibold" style={{color:'var(--c-accent)'}}>{fmtTime(schedule.unlockAt)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Lockdown confirm modals ── */}
+      {/* Lockdown Confirm Modal */}
       {showLockConfirm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-4">
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+          <motion.div initial={{scale:0.9,opacity:0}} animate={{scale:1,opacity:1}}
             className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl"
-            style={{ background: 'var(--c-surface)', border: '1px solid rgba(239,68,68,0.3)' }}>
+            style={{background:'var(--c-surface)',border:'1px solid rgba(239,68,68,0.3)'}}>
             <div className="p-6">
               <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto mb-4">
-                <MdLock className="text-red-500" size={28} />
+                <MdLock className="text-red-500" size={28}/>
               </div>
-              <h3 className="text-xl font-bold text-[var(--c-text)] text-center mb-2">Activate Lockdown Mode?</h3>
+              <h3 className="text-xl font-bold text-[var(--c-text)] text-center mb-2 font-orbitron">Aktifkan Lockdown?</h3>
               <p className="text-sm text-[var(--c-muted)] text-center mb-4 font-nunito">
-                Your AutoGen website will show a lockdown screen to all visitors. This will push to GitHub and trigger a Vercel deployment.
+                Website AutoGen akan menampilkan halaman lockdown ke semua pengunjung.<br/>
+                File di-push ke GitHub → Vercel deploy otomatis.
               </p>
-              <div>
-                <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-2">Lockdown Reason (shown to visitors)</label>
-                <textarea value={lockdownReason} onChange={e => setLockdownReason(e.target.value)}
-                  placeholder="e.g. Scheduled maintenance, temporarily unavailable…"
-                  rows={3} className="saturn-input resize-none w-full focus:outline-none"
-                  style={{ paddingLeft: 16 }} />
-              </div>
+              {lockdownReason
+                ? <div className="px-4 py-3 rounded-xl text-sm mb-2" style={{background:'var(--c-bg)',border:'1px solid var(--c-border)'}}>
+                    <span className="text-[var(--c-muted)]">Alasan: </span><span className="text-[var(--c-text)]">{lockdownReason}</span>
+                  </div>
+                : <div className="flex items-center gap-2 text-xs text-amber-400 mb-2"><MdWarning size={14}/> Tidak ada alasan yang diberikan</div>
+              }
+              {(mediaPreview||mediaUrl) && (
+                <div className="flex items-center gap-2 text-xs text-[var(--c-muted)] mb-2">
+                  <MdImage size={14} style={{color:'var(--c-accent)'}}/> Media akan ditampilkan di halaman lockdown
+                </div>
+              )}
+              {mediaFile&&!mediaUrl && (
+                <div className="flex items-center gap-2 text-xs text-amber-400 mb-2">
+                  <MdUpload size={14}/> Media akan diupload ke Cloudinary saat proses lockdown
+                </div>
+              )}
             </div>
-            <div className="flex gap-3 p-4" style={{ background: 'rgba(0,0,0,0.1)' }}>
-              <button onClick={() => setShowLockConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl font-bold text-sm text-[var(--c-text)] hover:opacity-80 transition btn-secondary">
-                Cancel
-              </button>
-              <button onClick={handleLockdown} disabled={lockdownLoading || !defaultBranch}
+            <div className="flex gap-3 p-4" style={{background:'rgba(0,0,0,0.1)'}}>
+              <button onClick={()=>setShowLockConfirm(false)} className="flex-1 py-2.5 rounded-xl font-bold text-sm transition btn-secondary">Batal</button>
+              <button onClick={handleLockdown} disabled={lockdownLoading||pushing}
                 className="flex-1 py-2.5 rounded-xl font-bold text-sm text-white bg-red-600 hover:bg-red-500 transition flex items-center justify-center gap-2">
-                <MdLock size={16} /> {lockdownLoading ? 'Processing…' : !defaultBranch ? 'Detecting...' : 'Activate Lockdown'}
+                <MdLock size={16}/>{(lockdownLoading||pushing)?'Memproses…':'Aktifkan Lockdown'}
               </button>
             </div>
           </motion.div>
@@ -821,10 +585,11 @@ export default function AutoGenClient({ user }: Props) {
       )}
 
       <ConfirmModal isOpen={showUnlockConfirm}
-        title="Deactivate Lockdown Mode?"
-        message="Your AutoGen website will become accessible again for all visitors. This will push to GitHub."
-        type="success" confirmText="Unlock Site" cancelText="Cancel"
-        onConfirm={handleUnlockdown} onCancel={() => setShowUnlockConfirm(false)} isLoading={lockdownLoading} />
+        title="Deaktifkan Lockdown?" type="success"
+        message="AutoGen akan kembali dapat diakses. Perubahan di-push ke GitHub dan Vercel deploy otomatis."
+        confirmText="Unlock Site" cancelText="Batal"
+        onConfirm={handleUnlockdown} onCancel={()=>setShowUnlockConfirm(false)}
+        isLoading={lockdownLoading||pushing}/>
     </div>
   );
 }

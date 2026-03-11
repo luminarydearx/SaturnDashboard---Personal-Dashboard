@@ -49,12 +49,14 @@ const seoData = {
 
 // ── Lockdown state ────────────────────────────────────────────────────
 const useLockdown = () => {
-  const [lockdown, setLockdown] = React.useState({ active: false, reason: "" });
+  const [lockdown, setLockdown] = React.useState({ active: false, reason: "", mediaUrl: "" });
   React.useEffect(() => {
-    fetch("/lockdown.json", { cache: "no-store" })
+    fetch("/lockdown.json?t=" + Date.now(), { cache: "no-store" })
       .then(r => r.json())
-      .then(d => { if (d?.active) setLockdown({ active: true, reason: d.reason || "" }); })
-      .catch(() => {}); // file might not exist
+      .then(d => {
+        if (d?.active) setLockdown({ active: true, reason: d.reason || "", mediaUrl: d.mediaUrl || "" });
+      })
+      .catch(() => {}); // file might not exist yet
   }, []);
   return lockdown;
 };
@@ -113,6 +115,7 @@ const AppContent = () => {
   const [showSplash, setShowSplash] = useState(false);
   const [isBugModalOpen, setIsBugModalOpen] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const lockdown = useLockdown(); // ← check lockdown on every load
 
   useEffect(() => {
     const handleUnhandledRejection = (event) => {
@@ -160,6 +163,11 @@ const AppContent = () => {
 
   if (showSplash) {
     return <LoadingSplash onDismiss={() => setShowSplash(false)} />;
+  }
+
+  // ── Show lockdown screen if active ────────────────────────────────────
+  if (lockdown.active) {
+    return <LockdownScreen reason={lockdown.reason} mediaUrl={lockdown.mediaUrl} />;
   }
 
   return (

@@ -9,26 +9,26 @@ interface PushOptions {
   repo: string;
   files: FileToPush[];
   message?: string;
-  branch?: string;  // ← TAMBAHKAN: optional branch parameter
+  branch?: string;
   onProgress?: (percent: number, status: string) => void;
 }
 
-// ── FIX: Tambahkan parameter branch ───────────────────────────────
 async function getFileSha(
   token: string,
   owner: string,
   repo: string,
   filePath: string,
-  branch: string = 'main'  // Default ke 'main'
+  branch: string = 'master'
 ): Promise<string | null> {
   try {
-    // ── FIX: Hapus spasi di URL & tambahkan ?ref=branch ─────────
+    // ✅ FIX: URL tanpa spasi, query param ?ref=branch
     const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${branch}`;
     
     const response = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
+        // ✅ FIX: Gunakan 'token' untuk classic PAT
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github.v3+json',
       },
     });
     
@@ -36,16 +36,21 @@ async function getFileSha(
       const data = await response.json();
       return data.sha || null;
     }
-    // Jika file belum ada (404), return null agar bisa dibuat baru
-    if (response.status === 404) return null;
     
+    if (response.status === 404) {
+      // File belum ada, return null agar bisa dibuat baru
+      return null;
+    }
+    
+    const errText = await response.text();
+    console.error(`[getFileSha] ${filePath}: HTTP ${response.status} - ${errText}`);
     return null;
-  } catch {
+  } catch (err: any) {
+    console.error(`[getFileSha] Exception ${filePath}:`, err);
     return null;
   }
 }
 
-// ── FIX: Tambahkan parameter branch ───────────────────────────────
 async function pushFile(
   token: string,
   owner: string,
@@ -53,39 +58,46 @@ async function pushFile(
   filePath: string,
   content: string,
   message: string,
-  branch: string = 'main'  // Default ke 'main'
+  branch: string = 'master'
 ): Promise<boolean> {
-  // Dapatkan SHA file yang ada di branch tersebut (untuk update)
-  const sha = await getFileSha(token, owner, repo, filePath, branch);
-  
-  const body: Record<string, unknown> = {
-    message,
-    content: Buffer.from(content).toString('base64'),
-    branch,  // ── FIX: Tambahkan branch ke body request GitHub API
-  };
-  
-  // Jika file sudah ada (punya SHA), sertakan untuk update
-  if (sha) body.sha = sha;
+  try {
+    const sha = await getFileSha(token, owner, repo, filePath, branch);
+    
+    const body: Record<string, any> = {
+      message,
+      content: Buffer.from(content).toString('base64'),
+      branch, // GitHub API butuh branch di body
+    };
+    
+    if (sha) body.sha = sha;
 
-  // ── FIX: Hapus spasi di URL ────────────────────────────────────
-  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`;
+    // ✅ FIX: URL tanpa spasi
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`;
 
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+    console.log(`[pushFile] ${filePath} -> ${url} (branch: ${branch}, hasSha: ${!!sha})`);
 
-  if (!response.ok) {
-    const err = await response.text();
-    console.error(`[GitHub Push Error] ${filePath}:`, err);
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error(`[pushFile] FAILED ${filePath}: HTTP ${response.status} - ${err}`);
+      return false;
+    }
+    
+    console.log(`[pushFile] SUCCESS ${filePath}`);
+    return true;
+  } catch (err: any) {
+    console.error(`[pushFile] EXCEPTION ${filePath}:`, err);
     return false;
   }
-  return true;
 }
 
 export async function pushToGithub(options: PushOptions): Promise<{ success: boolean; pushed: number; errors: string[] }> {
@@ -95,9 +107,11 @@ export async function pushToGithub(options: PushOptions): Promise<{ success: boo
     repo, 
     files, 
     message = 'SaturnDashboard: data sync', 
-    branch = 'main',  // ── FIX: Default branch ke 'main'
+    branch = 'master',
     onProgress 
   } = options;
+  
+  console.log(`[pushToGithub] Start: ${owner}/${repo}#${branch} (${files.length} files)`);
   
   const errors: string[] = [];
   let pushed = 0;
@@ -107,7 +121,6 @@ export async function pushToGithub(options: PushOptions): Promise<{ success: boo
     const percent = Math.round(((i) / files.length) * 100);
     onProgress?.(percent, `Pushing ${file.path}...`);
 
-    // ── FIX: Kirimkan parameter branch ke pushFile ───────────────
     const success = await pushFile(token, owner, repo, file.path, file.content, message, branch);
     
     if (success) {
@@ -120,5 +133,7 @@ export async function pushToGithub(options: PushOptions): Promise<{ success: boo
     onProgress?.(donePercent, success ? `✓ ${file.path}` : `✗ ${file.path}`);
   }
 
-  return { success: errors.length === 0, pushed, errors };
+  const result = { success: errors.length === 0, pushed, errors };
+  console.log('[pushToGithub] Done:', result);
+  return result;
 }
