@@ -2,5 +2,5 @@ node_modules
 .next
 electron
 dist-electron
-*.zip=
+*.zip
 .env.local

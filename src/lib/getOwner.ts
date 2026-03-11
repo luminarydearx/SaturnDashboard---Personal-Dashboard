@@ -1,6 +1,6 @@
 // lib/getOwner.ts
 import { PublicUser } from "@/types";
-import usersData from "../../data/users.json";
+import usersData from "@data/users.json";
 
 /**
  * Mengambil data user dengan role 'owner' dari users.json
