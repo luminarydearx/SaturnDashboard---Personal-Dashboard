@@ -14,7 +14,7 @@ import { SiGithub } from 'react-icons/si';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ── Constants ─────────────────────────────────────────────────────────────
-const AUTOGEN_URL = 'https://saturn-dashboard-yourname.vercel.app'; // Ganti dengan URL Anda
+const AUTOGEN_URL = 'https://auto-generator-app.vercel.app'; // Ganti dengan URL Anda
 const AUTOGEN_GITHUB = 'https://github.com/luminarydearx/SaturnDashboard---Personal-Dashboard';
 const AUTOGEN_REPO_OWNER = 'luminarydearx';
 const AUTOGEN_REPO_NAME  = 'SaturnDashboard---Personal-Dashboard';
