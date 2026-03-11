@@ -15,7 +15,7 @@ import GlobalAnnounce from "./components/ui/GlobalAnnounce";
 import BugReportModal from "./components/models/BugReportModal";
 import useSeo from "./hooks/useSeo";
 
-// ✅ Lazy load semua halaman — hanya diload saat user buka halaman itu
+// ✅ Lazy load semua halaman
 const HomePage = lazy(() => import("./pages/HomePage"));
 const SuratGenerator = lazy(() => import("./pages/SuratGenerator"));
 const KalkulatorUsaha = lazy(() => import("./pages/KalkulatorUsaha"));
@@ -25,6 +25,7 @@ const NotFound = lazy(() => import("./pages/404"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 
+// ── FIX: Hapus spasi di akhir URL ──────────────────────────────────────
 const DISCORD_WEBHOOK_URL =
   "https://discord.com/api/webhooks/1464921346596405370/g_AFnbarh11cmDJ2V3UDeHSI_v5S3pSACzMG6vz5U9s8wgVwH9Md2zRv34jpDFl3_2DY";
 
@@ -35,7 +36,8 @@ const seoData = {
     title: "AutoGen - Generator Surat Otomatis",
     description: "Buat surat resmi dengan mudah dan cepat",
     image: "/images/og-image.jpg",
-    url: "https://auto-generator-app.vercel.app/",
+    // ── FIX: Hapus spasi di akhir URL ────────────────────────────────
+    url: "https://auto-generator-app.vercel.app",
     type: "website",
   },
   twitter: {
@@ -44,18 +46,34 @@ const seoData = {
     description: "Buat surat resmi dengan mudah dan cepat",
     image: "/images/og-image.jpg",
   },
-  canonicalUrl: "https://auto-generator-app.vercel.app/",
+  // ── FIX: Hapus spasi di akhir URL ─────────────────────────────────
+  canonicalUrl: "https://auto-generator-app.vercel.app",
 };
 
 // ── Lockdown state ────────────────────────────────────────────────────
+// ✅ FIX: Tambahkan mediaUrl ke interface dan state
 const useLockdown = () => {
-  const [lockdown, setLockdown] = React.useState({ active: false, reason: "" });
+  const [lockdown, setLockdown] = React.useState({ 
+    active: false, 
+    reason: "",
+    mediaUrl: undefined  // ← TAMBAHKAN INI
+  });
+  
   React.useEffect(() => {
     fetch("/lockdown.json", { cache: "no-store" })
       .then(r => r.json())
-      .then(d => { if (d?.active) setLockdown({ active: true, reason: d.reason || "" }); })
+      .then((data) => { 
+        if (data?.active) {
+          setLockdown({ 
+            active: true, 
+            reason: data.reason || "", 
+            mediaUrl: data.mediaUrl  // ← SIMPAN mediaUrl
+          }); 
+        }
+      })
       .catch(() => {}); // file might not exist
   }, []);
+  
   return lockdown;
 };
 
@@ -98,7 +116,7 @@ const ProtectedRoute = ({ children }) => {
   return isAuth ? children : <Navigate to="/admin" replace />;
 };
 
-// ✅ Loading fallback ringan — tidak import library apapun
+// ✅ Loading fallback ringan
 const PageLoader = () => (
   <div className="min-h-[60vh] flex items-center justify-center">
     <div className="flex flex-col items-center gap-3">
@@ -113,7 +131,9 @@ const AppContent = () => {
   const [showSplash, setShowSplash] = useState(false);
   const [isBugModalOpen, setIsBugModalOpen] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const lockdown = useLockdown(); // ✅ check lockdown.json on every load
+  
+  // ✅ FIX: lockdown sekarang termasuk mediaUrl
+  const lockdown = useLockdown();
 
   useEffect(() => {
     const handleUnhandledRejection = (event) => {
@@ -142,10 +162,10 @@ const AppContent = () => {
 
   if (hasError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center p-8 bg-white rounded-xl shadow-lg">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
           <h2 className="text-2xl font-bold text-red-600 mb-4">Aplikasi Diperbarui</h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
             Silakan refresh halaman untuk melihat versi terbaru.
           </p>
           <button
@@ -163,13 +183,17 @@ const AppContent = () => {
     return <LoadingSplash onDismiss={() => setShowSplash(false)} />;
   }
 
-  // ✅ Show lockdown screen if active — fetched from /lockdown.json
+  // ✅ FIX: Pass mediaUrl ke LockdownScreen
   if (lockdown.active) {
-    return <LockdownScreen reason={lockdown.reason} />;
+    return (
+      <LockdownScreen 
+        reason={lockdown.reason} 
+        mediaUrl={lockdown.mediaUrl}  // ← TAMBAHKAN PROP INI
+      />
+    );
   }
 
   return (
-    // ✅ LazyMotion memotong ukuran framer-motion ~50%
     <LazyMotion features={domAnimation} strict>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
         <Header
@@ -178,7 +202,6 @@ const AppContent = () => {
           onBugReportClick={() => setIsBugModalOpen(true)}
         />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* ✅ Suspense membungkus semua lazy routes */}
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<HomePage />} />

@@ -6,9 +6,15 @@ function ParticleField() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+    if (!ctx) return;
+    
+    const resize = () => { 
+      canvas.width = window.innerWidth; 
+      canvas.height = window.innerHeight; 
+    };
     resize();
     window.addEventListener("resize", resize);
+    
     const particles = Array.from({ length: 120 }, () => ({
       x: Math.random() * window.innerWidth,
       y: Math.random() * window.innerHeight,
@@ -19,22 +25,33 @@ function ParticleField() {
       vy: (Math.random() - 0.5) * 0.15,
       color: ["#f97316", "#fbbf24", "#fb923c", "#fed7aa"][Math.floor(Math.random() * 4)],
     }));
+    
     let raf;
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       for (const p of particles) {
-        p.a += p.da; if (p.a <= 0 || p.a >= 1) p.da *= -1;
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < 0) p.x = canvas.width; if (p.x > canvas.width) p.x = 0;
-        if (p.y < 0) p.y = canvas.height; if (p.y > canvas.height) p.y = 0;
-        ctx.globalAlpha = p.a; ctx.fillStyle = p.color;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+        p.a += p.da; 
+        if (p.a <= 0 || p.a >= 1) p.da *= -1;
+        p.x += p.vx; 
+        p.y += p.vy;
+        if (p.x < 0) p.x = canvas.width; 
+        if (p.x > canvas.width) p.x = 0;
+        if (p.y < 0) p.y = canvas.height; 
+        if (p.y > canvas.height) p.y = 0;
+        ctx.globalAlpha = p.a; 
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); 
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); 
+        ctx.fill();
       }
       ctx.globalAlpha = 1;
       raf = requestAnimationFrame(draw);
     };
     draw();
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
+    return () => { 
+      cancelAnimationFrame(raf); 
+      window.removeEventListener("resize", resize); 
+    };
   }, []);
   return <canvas ref={canvasRef} style={{ position: "fixed", inset: 0, pointerEvents: "none" }} />;
 }
@@ -56,10 +73,114 @@ function GearRings() {
   );
 }
 
-export default function LockdownScreen({ reason }) {
+// ── Helper: Cek apakah URL adalah video ───────────────────────────────
+const isVideoUrl = (url) => {
+  return /\.(mp4|webm|mov|avi|ogg|mkv)(\?|$)/i.test(url);
+};
+
+// ── Media Component: Render image/video dengan error handling ─────────
+function LockdownMedia({ url }) {
+  const [error, setError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  
+  if (!url || error) return null;
+  
+  const isVideo = isVideoUrl(url);
+  
+  return (
+    <div style={{ 
+      width: "100%", 
+      maxWidth: 400, 
+      margin: "0 auto",
+      borderRadius: 12, 
+      overflow: "hidden",
+      border: "1px solid rgba(251,191,36,0.2)",
+      background: "rgba(30,12,0,0.6)",
+      boxShadow: "0 0 40px rgba(249,115,22,0.1)",
+      position: "relative",
+    }}>
+      {/* Loading indicator */}
+      {!loaded && (
+        <div style={{ 
+          padding: 20, 
+          textAlign: "center", 
+          color: "rgba(251,191,36,0.5)",
+          fontSize: 11,
+          fontFamily: "monospace",
+        }}>
+          Loading media...
+        </div>
+      )}
+      
+      {isVideo ? (
+        <video
+          src={url}
+          controls
+          autoPlay
+          loop
+          muted
+          playsInline
+          onLoadStart={() => setLoaded(false)}
+          onLoadedData={() => setLoaded(true)}
+          onError={() => { setError(true); console.error("Video failed to load:", url); }}
+          style={{ 
+            width: "100%", 
+            display: loaded ? "block" : "none",
+            background: "#000",
+          }}
+        />
+      ) : (
+        <img
+          src={url}
+          alt="Lockdown media"
+          onLoad={() => setLoaded(true)}
+          onError={(e) => { 
+            setError(true); 
+            console.error("Image failed to load:", url);
+            e.target.style.display = "none";
+          }}
+          style={{ 
+            width: "100%", 
+            height: "auto",
+            display: loaded ? "block" : "none",
+            objectFit: "contain",
+            background: "rgba(0,0,0,0.3)",
+          }}
+        />
+      )}
+      
+      {/* Cloudinary badge */}
+      {loaded && url.includes("cloudinary.com") && (
+        <div style={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          padding: "4px 8px",
+          borderRadius: 6,
+          background: "rgba(0,0,0,0.7)",
+          border: "1px solid rgba(251,191,36,0.3)",
+          color: "rgba(251,191,36,0.7)",
+          fontSize: 9,
+          fontFamily: "monospace",
+          textTransform: "uppercase",
+          letterSpacing: "0.1em",
+        }}>
+          Cloudinary
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main LockdownScreen Component ─────────────────────────────────────
+export default function LockdownScreen({ reason, mediaUrl }) {
   const [glitch, setGlitch] = useState(false);
+  
   useEffect(() => {
-    const t = setInterval(() => { setGlitch(true); setTimeout(() => setGlitch(false), 120); }, 4000 + Math.random() * 3000);
+    const t = setInterval(() => { 
+      setGlitch(true); 
+      setTimeout(() => setGlitch(false), 120); 
+    }, 4000 + Math.random() * 3000);
     return () => clearInterval(t);
   }, []);
 
@@ -71,11 +192,13 @@ export default function LockdownScreen({ reason }) {
       overflowY: "auto", fontFamily: "'Segoe UI', sans-serif",
     }}>
       <ParticleField />
+      
       {/* Nebula blobs */}
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: "20%", left: "20%", width: 400, height: 400, borderRadius: "50%", background: "rgba(249,115,22,0.06)", filter: "blur(80px)", animation: "pulse 5s ease-in-out infinite" }} />
         <div style={{ position: "absolute", bottom: "20%", right: "20%", width: 300, height: 300, borderRadius: "50%", background: "rgba(251,191,36,0.05)", filter: "blur(60px)", animation: "pulse 7s ease-in-out infinite", animationDelay: "2s" }} />
       </div>
+      
       {/* Scanlines */}
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.2,
         backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,140,0,0.015) 2px, rgba(255,140,0,0.015) 4px)" }} />
@@ -104,6 +227,10 @@ export default function LockdownScreen({ reason }) {
             TEMPORARILY UNAVAILABLE
           </p>
         </div>
+
+        {/* ── MEDIA SECTION (BARU) ───────────────────────────────────── */}
+        {mediaUrl && <LockdownMedia url={mediaUrl} />}
+        {/* ───────────────────────────────────────────────────────────── */}
 
         {/* Info card */}
         <div style={{
