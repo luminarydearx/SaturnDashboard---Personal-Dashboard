@@ -24,7 +24,7 @@ function buildBackupEntries() {
     important: 'Restore by replacing the /data/ folder. Passwords are bcrypt hashes.',
   };
 
-  const safeSettings = { ...settings, githubToken: '[REDACTED - re-enter in Settings]' };
+  const safeSettings = { ...settings }; // token never stored in file
 
   return [
     { name: 'data/users.json', content: JSON.stringify(users, null, 2) },
@@ -106,21 +106,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Owner/Co-Owner only' }, { status: 403 });
   }
 
-  const settings = getSettings();
+  const settings   = getSettings();
+  // Token always from env var — never from file
+  const githubToken = process.env.GITHUB_TOKEN;
+  const githubOwner = settings.githubOwner || process.env.NEXT_PUBLIC_GITHUB_OWNER || '';
+  const githubRepo  = settings.githubRepo  || process.env.NEXT_PUBLIC_GITHUB_REPO  || '';
 
-  if (!settings.githubToken || !settings.githubOwner || !settings.githubRepo) {
-    return NextResponse.json({ success: false, error: 'GitHub not configured in Settings' });
+  if (!githubToken || !githubOwner || !githubRepo) {
+    return NextResponse.json({
+      success: false,
+      error: !githubToken
+        ? 'GITHUB_TOKEN belum diset di Environment Variables'
+        : 'GitHub owner/repo belum dikonfigurasi',
+    });
   }
 
   const entries = buildBackupEntries();
   const zipBuf = createZipBuffer(entries);
   const ts = timestamp();
 
-  const repoName = extractRepoName(settings.githubRepo);
+  const repoName = extractRepoName(githubRepo);
 
   const result = await pushToGithub({
-    token: settings.githubToken,
-    owner: settings.githubOwner,
+    token: githubToken,
+    owner: githubOwner,
     repo: repoName,
     files: [
       {

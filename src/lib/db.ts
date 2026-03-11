@@ -137,7 +137,7 @@ export interface AutogenSchedule {
 }
 
 export interface Settings {
-  githubToken:       string;
+  // githubToken is intentionally absent — use process.env.GITHUB_TOKEN only
   githubRepo:        string;
   githubOwner:       string;
   lastPush:          string;
@@ -152,12 +152,20 @@ const DEFAULT_SCHEDULE: AutogenSchedule = {
 
 export function getSettings(): Settings {
   return readJson<Settings>('settings.json', {
-    githubToken: '', githubRepo: '', githubOwner: '', lastPush: '',
+    githubRepo: '', githubOwner: '', lastPush: '',
   });
 }
 
+/** Always read GitHub token from env var — NEVER from file */
+export function getGithubToken(): string {
+  return process.env.GITHUB_TOKEN || '';
+}
+
 export function saveSettings(settings: Settings): void {
-  writeJson('settings.json', settings);
+  // Defensive: ensure githubToken never lands in the JSON file
+  const safe: Record<string, unknown> = { ...settings as any };
+  delete safe.githubToken;
+  writeJson('settings.json', safe);
 }
 
 export function getAutogenSchedule(): AutogenSchedule {
@@ -197,7 +205,7 @@ export function getAllDataAsJson(): Record<string, unknown> {
   return {
     users: getUsers().map(u => ({ ...u, password: '[HIDDEN]' })),
     notes: getNotes(),
-    settings: { ...getSettings(), githubToken: '[HIDDEN]' },
+    settings: getSettings(),
   };
 }
 

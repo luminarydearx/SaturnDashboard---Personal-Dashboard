@@ -6,12 +6,12 @@ import { useToast } from '@/components/ui/Toast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import {
   MdCode, MdOpenInNew, MdLock, MdLockOpen, MdRefresh, MdWarning,
-  MdCheckCircle, MdVisibility, MdPlayArrow, MdStop, MdSettings,
-  MdSchedule, MdImage, MdClose, MdKey, MdPowerSettingsNew, MdCheck,
+  MdCheckCircle, MdVisibility, MdPlayArrow, MdStop,
+  MdSchedule, MdImage, MdClose, MdKey, MdPowerSettingsNew,
   MdCalendarToday, MdVideoLibrary, MdInfo, MdUpload,
 } from 'react-icons/md';
 import { SiGithub } from 'react-icons/si';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const AUTOGEN_URL          = 'https://auto-generator-app.vercel.app';
@@ -57,8 +57,6 @@ const DEFAULT_SCHEDULE: Schedule = {
 interface Props { user: PublicUser }
 
 export default function AutoGenClient({ user: _user }: Props) {
-  const [tab,              setTab]             = useState<'preview' | 'settings'>('settings');
-
   // Preview
   const [iframeKey,        setIframeKey]       = useState(0);
   const [showIframe,       setShowIframe]      = useState(false);
@@ -86,12 +84,9 @@ export default function AutoGenClient({ user: _user }: Props) {
   const [uploadingMedia,   setUploadingMedia]  = useState(false);
   const mediaRef                               = useRef<HTMLInputElement>(null);
 
-  // Token
-  const [showTokenInput,   setShowTokenInput]  = useState(false);
-  const [tokenInput,       setTokenInput]      = useState('');
+  // Token — read-only from ENV (via /api/settings), never editable in UI
   const [tokenPreview,     setTokenPreview]    = useState('');
-  const [tokenSaving,      setTokenSaving]     = useState(false);
-  const [tokenSaved,       setTokenSaved]      = useState(false);
+  const [tokenSource,      setTokenSource]     = useState<'env' | 'missing' | ''>('');
 
   // Restart
   const [restartLoading,   setRestartLoading]  = useState(false);
@@ -116,10 +111,13 @@ export default function AutoGenClient({ user: _user }: Props) {
       .then((s: any) => { if (s && !s.error) setSchedule(s as Schedule); })
       .catch(() => {});
 
-    // 3. Load token preview
+    // 3. Token status from ENV (server reads process.env.GITHUB_TOKEN)
     fetch('/api/settings', { cache: 'no-store' })
       .then(r => r.json())
-      .then((d: any) => { if (d?.tokenPreview) setTokenPreview(d.tokenPreview); })
+      .then((d: any) => {
+        if (d?.tokenPreview) setTokenPreview(d.tokenPreview);
+        if (d?.tokenSource)  setTokenSource(d.tokenSource as 'env' | 'missing');
+      })
       .catch(() => {});
   }, []);
 
@@ -271,23 +269,6 @@ export default function AutoGenClient({ user: _user }: Props) {
   };
 
   // ─── Save GitHub token ────────────────────────────────────────────────────
-  const saveToken = async () => {
-    if (!tokenInput.trim()) { toastErr('Token kosong'); return; }
-    setTokenSaving(true);
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ githubToken: tokenInput.trim() }),
-      });
-      const d = await res.json();
-      if (!d.success) throw new Error(d.error || 'Gagal');
-      setTokenPreview(tokenInput.slice(0, 8) + '••••••••' + tokenInput.slice(-4));
-      setTokenInput(''); setShowTokenInput(false);
-      setTokenSaved(true); setTimeout(() => setTokenSaved(false), 3000);
-      success('Token disimpan! Coba lockdown sekarang.');
-    } catch (e: any) { toastErr(e.message); } finally { setTokenSaving(false); }
-  };
-
   // ─── Redeploy AutoGen on Vercel ───────────────────────────────────────────
   const restartServer = async () => {
     setRestartLoading(true);
@@ -376,17 +357,17 @@ export default function AutoGenClient({ user: _user }: Props) {
             </button>
           )}
 
-          {/* GitHub Token button */}
-          <button onClick={() => setShowTokenInput(p => !p)} title={tokenPreview || 'Set GitHub Token'}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+          {/* GitHub Token — read-only status from ENV */}
+          <div title={tokenSource === 'env' ? `GITHUB_TOKEN: ${tokenPreview}` : 'GITHUB_TOKEN tidak ditemukan di env!'}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono cursor-default"
             style={{
-              background: tokenSaved ? 'rgba(34,197,94,.1)' : 'var(--c-surface)',
-              border:     tokenSaved ? '1px solid rgba(34,197,94,.3)' : `1px solid ${tokenPreview ? 'var(--c-border)' : 'rgba(239,68,68,.4)'}`,
-              color:      tokenSaved ? '#4ade80' : (tokenPreview ? 'var(--c-muted)' : '#f87171'),
+              background: tokenSource === 'env' ? 'rgba(34,197,94,.08)' : 'rgba(239,68,68,.08)',
+              border:     tokenSource === 'env' ? '1px solid rgba(34,197,94,.25)' : '1px solid rgba(239,68,68,.35)',
+              color:      tokenSource === 'env' ? '#4ade80' : '#f87171',
             }}>
-            {tokenSaved ? <MdCheck size={14} /> : <MdKey size={14} />}
-            {tokenPreview ? tokenPreview : 'Set Token'}
-          </button>
+            <MdKey size={12} />
+            {tokenPreview || (tokenSource === 'missing' ? '⚠ NO TOKEN' : '…')}
+          </div>
 
           {/* Restart button */}
           <button onClick={restartServer} disabled={restartLoading} title="Redeploy AutoGen di Vercel"
@@ -405,74 +386,82 @@ export default function AutoGenClient({ user: _user }: Props) {
         </div>
       </div>
 
-      {/* ══ TOKEN INPUT (collapsible) ════════════════════════════════════════ */}
-      {showTokenInput && (
-        <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }}
-          className="rounded-2xl p-4 flex flex-col gap-3"
-          style={{ background: 'var(--c-surface)', border: '1px solid rgba(239,68,68,.25)' }}>
-          <div className="flex items-center gap-2">
-            <MdKey size={15} className="text-red-400" />
-            <span className="text-[var(--c-text)] text-sm font-semibold">Update GitHub Token</span>
-            <span className="ml-auto text-[var(--c-muted)] text-xs">
-              Butuh scope: <code className="font-mono" style={{ color:'var(--c-accent)' }}>repo</code>
-            </span>
-          </div>
-          {tokenPreview && (
-            <p className="text-xs font-mono text-amber-400">Token aktif: {tokenPreview}</p>
-          )}
-          <div className="flex gap-2">
-            <input type="password" value={tokenInput} onChange={e => setTokenInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && saveToken()}
-              placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-              className="saturn-input flex-1 focus:outline-none font-mono text-xs" style={{ paddingLeft: 12 }} />
-            <button onClick={saveToken} disabled={tokenSaving || !tokenInput.trim()}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold btn-primary flex-shrink-0">
-              {tokenSaving ? <MdRefresh size={14} className="animate-spin" /> : <MdCheck size={14} />}
-              {tokenSaving ? 'Saving…' : 'Save'}
-            </button>
-            <button onClick={() => { setShowTokenInput(false); setTokenInput(''); }}
-              className="p-2 rounded-xl text-[var(--c-muted)] hover:text-[var(--c-text)] transition-colors"
-              style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)' }}>
-              <MdClose size={14} />
-            </button>
-          </div>
-          <p className="text-[var(--c-muted)] text-xs">
-            Buat token di{' '}
-            <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer"
-              className="underline" style={{ color: 'var(--c-accent)' }}>
-              github.com/settings/tokens
-            </a>{' '}
-            → Classic Token → centang <code className="font-mono">repo</code>
+      {/* TOKEN MISSING WARNING ════════════════════════════════════════════ */}
+      {tokenSource === 'missing' && (
+        <motion.div initial={{ opacity:0, y:-6 }} animate={{ opacity:1, y:0 }}
+          className="flex items-start gap-3 px-4 py-3 rounded-xl"
+          style={{ background: 'rgba(239,68,68,.07)', border: '1px solid rgba(239,68,68,.25)' }}>
+          <MdWarning size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs leading-relaxed text-[var(--c-muted)]">
+            <span className="font-bold text-red-400">GITHUB_TOKEN tidak ditemukan!</span>
+            {' '}Tambahkan di Vercel Dashboard → SaturnDashboard → Settings → Environment Variables →{' '}
+            <code className="font-mono bg-black/20 px-1 rounded">GITHUB_TOKEN</code>
+            {' '}(Classic PAT, scope:{' '}
+            <code className="font-mono bg-black/20 px-1 rounded">repo</code>)
           </p>
         </motion.div>
       )}
 
-      {/* ══ TABS ════════════════════════════════════════════════════════════ */}
-      <div className="flex gap-1"
-        style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)', padding: 5, borderRadius: 14 }}>
-        {([
-          { id: 'settings', label: 'Settings',  icon: MdSettings  },
-          { id: 'preview',  label: 'Preview',   icon: MdVisibility },
-        ] as const).map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setTab(id)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
-            style={{
-              background: tab === id ? 'var(--c-gradient-r)' : 'transparent',
-              color:      tab === id ? '#fff' : 'var(--c-muted)',
-              boxShadow:  tab === id ? '0 4px 14px rgba(var(--c-accent-rgb),.35)' : 'none',
-            }}>
-            <Icon size={15} /> {label}
-          </button>
-        ))}
-      </div>
+      {/* ══ 2-COLUMN LAYOUT: Preview (kiri) — Settings (kanan) ═══════════ */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-5 items-start">
 
-      {/* ══ TAB CONTENT ═════════════════════════════════════════════════════ */}
-      <AnimatePresence mode="wait">
+        {/* ── KIRI: PREVIEW ────────────────────────────────────────────────── */}
+        <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
+          className="rounded-2xl overflow-hidden flex flex-col"
+          style={{ background:'var(--c-surface)', border:'1px solid var(--c-border)', minHeight:600 }}>
 
-        {/* ── SETTINGS TAB ────────────────────────────────────────────────── */}
-        {tab === 'settings' && (
-          <motion.div key="settings" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }}
-            className="flex flex-col gap-5">
+          {/* Toolbar */}
+          <div className="flex items-center gap-3 px-4 py-3 border-b flex-shrink-0"
+            style={{ borderColor:'var(--c-border)', background:'var(--c-surface2)' }}>
+            <div className="flex items-center gap-1.5 flex-1 px-3 py-1.5 rounded-lg text-xs font-mono text-[var(--c-muted)]"
+              style={{ background:'var(--c-bg)', border:'1px solid var(--c-border)' }}>
+              <MdOpenInNew size={12} /> {AUTOGEN_URL}
+            </div>
+            <button onClick={() => { setShowIframe(true); setIframeKey(p => p + 1); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold btn-primary">
+              <MdPlayArrow size={14} /> Preview
+            </button>
+            {showIframe && (
+              <>
+                <button onClick={() => setIframeKey(p => p + 1)}
+                  className="p-2 rounded-xl text-[var(--c-muted)] hover:text-[var(--c-text)] transition-colors"
+                  style={{ background:'var(--c-surface)', border:'1px solid var(--c-border)' }}>
+                  <MdRefresh size={14} />
+                </button>
+                <button onClick={() => setShowIframe(false)}
+                  className="p-2 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors"
+                  style={{ border:'1px solid rgba(239,68,68,.2)' }}>
+                  <MdStop size={14} />
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* iframe / placeholder */}
+          {showIframe ? (
+            <iframe key={iframeKey} src={AUTOGEN_URL} className="flex-1 w-full border-0"
+              style={{ minHeight:550 }} title="AutoGen Preview"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20">
+              <div className="w-20 h-20 rounded-3xl flex items-center justify-center"
+                style={{ background:'linear-gradient(135deg,rgba(var(--c-accent-rgb),.2),rgba(var(--c-accent2-rgb),.1))', border:'1px solid rgba(var(--c-accent-rgb),.2)' }}>
+                <MdVisibility size={36} style={{ color:'var(--c-accent)' }} />
+              </div>
+              <div className="text-center">
+                <p className="font-orbitron text-lg font-bold text-[var(--c-text)] mb-2">Live Preview</p>
+                <p className="text-[var(--c-muted)] text-sm">Preview website AutoGen secara realtime</p>
+              </div>
+              <button onClick={() => { setShowIframe(true); setIframeKey(p => p + 1); }} className="btn-primary">
+                <MdPlayArrow size={18} /> Load Preview
+              </button>
+            </div>
+          )}
+        </motion.div>
+
+        {/* ── KANAN: SETTINGS ───────────────────────────────────────────────── */}
+        <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
+          className="flex flex-col gap-5">
 
             {/* Info banner */}
             <div className="flex items-start gap-3 px-4 py-3 rounded-xl"
@@ -712,65 +701,8 @@ export default function AutoGenClient({ user: _user }: Props) {
               </div>
             </div>
 
-          </motion.div>
-        )}
-
-        {/* ── PREVIEW TAB ─────────────────────────────────────────────────── */}
-        {tab === 'preview' && (
-          <motion.div key="preview" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }}
-            className="rounded-2xl overflow-hidden flex flex-col"
-            style={{ background:'var(--c-surface)', border:'1px solid var(--c-border)', minHeight:600 }}>
-
-            {/* Toolbar */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b flex-shrink-0"
-              style={{ borderColor:'var(--c-border)', background:'var(--c-surface2)' }}>
-              <div className="flex items-center gap-1.5 flex-1 px-3 py-1.5 rounded-lg text-xs font-mono text-[var(--c-muted)]"
-                style={{ background:'var(--c-bg)', border:'1px solid var(--c-border)' }}>
-                <MdOpenInNew size={12} /> {AUTOGEN_URL}
-              </div>
-              <button onClick={() => { setShowIframe(true); setIframeKey(p => p + 1); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold btn-primary">
-                <MdPlayArrow size={14} /> Preview
-              </button>
-              {showIframe && (
-                <>
-                  <button onClick={() => setIframeKey(p => p + 1)}
-                    className="p-2 rounded-xl text-[var(--c-muted)] hover:text-[var(--c-text)] transition-colors"
-                    style={{ background:'var(--c-surface)', border:'1px solid var(--c-border)' }}>
-                    <MdRefresh size={14} />
-                  </button>
-                  <button onClick={() => setShowIframe(false)}
-                    className="p-2 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors"
-                    style={{ border:'1px solid rgba(239,68,68,.2)' }}>
-                    <MdStop size={14} />
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* iframe / placeholder */}
-            {showIframe ? (
-              <iframe key={iframeKey} src={AUTOGEN_URL} className="flex-1 w-full border-0"
-                style={{ minHeight:550 }} title="AutoGen Preview"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20">
-                <div className="w-20 h-20 rounded-3xl flex items-center justify-center"
-                  style={{ background:'linear-gradient(135deg,rgba(var(--c-accent-rgb),.2),rgba(var(--c-accent2-rgb),.1))', border:'1px solid rgba(var(--c-accent-rgb),.2)' }}>
-                  <MdVisibility size={36} style={{ color:'var(--c-accent)' }} />
-                </div>
-                <div className="text-center">
-                  <p className="font-orbitron text-lg font-bold text-[var(--c-text)] mb-2">Live Preview</p>
-                  <p className="text-[var(--c-muted)] text-sm">Preview website AutoGen secara realtime</p>
-                </div>
-                <button onClick={() => { setShowIframe(true); setIframeKey(p => p + 1); }} className="btn-primary">
-                  <MdPlayArrow size={18} /> Load Preview
-                </button>
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </motion.div>{/* end right col */}
+      </div>{/* end 2-column grid */}
 
       {/* ══ LOCKDOWN CONFIRM MODAL ════════════════════════════════════════ */}
       {showLockConfirm && (

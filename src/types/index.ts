@@ -56,7 +56,7 @@ export interface AppData {
   users: User[];
   notes: Note[];
   settings: {
-    githubToken: string;
+    // githubToken removed — use process.env.GITHUB_TOKEN only
     githubRepo: string;
     githubOwner: string;
     lastPush: string;

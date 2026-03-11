@@ -10,7 +10,6 @@ import { MdSettings, MdCloudUpload, MdInfo } from 'react-icons/md';
 import { format } from 'date-fns';
 
 interface Settings {
-  githubToken: string;
   githubRepo: string;
   githubOwner: string;
   lastPush: string;

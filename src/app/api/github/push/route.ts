@@ -85,14 +85,13 @@ export async function POST(req: NextRequest) {
 
     console.log('[GitHub Push API] Result:', result);
 
-    // Update metadata settings (tapi JANGAN update githubToken di file settings)
+    // Update metadata only — saveSettings will strip githubToken automatically
     const currentSettings = getSettings();
-    saveSettings({ 
-      ...currentSettings, 
-      // githubToken: githubToken, <--- JANGAN SIMPAN TOKEN KE FILE DEMI KEAMANAN
-      githubOwner: repoOwner, 
-      githubRepo: repoName, 
-      lastPush: new Date().toISOString() 
+    saveSettings({
+      ...currentSettings,
+      githubOwner: repoOwner,
+      githubRepo:  repoName,
+      lastPush:    new Date().toISOString(),
     });
 
     if (result.success) {
