@@ -1,74 +1,93 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { getUserById, getRawDataFiles, getSettings, saveSettings } from '@/lib/db';
+import { getUserById, getSettings, saveSettings } from '@/lib/db';
 import { pushToGithub } from '@/lib/github';
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return new Response('Unauthorized', { status: 401 });
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
-  const user = getUserById(session.userId);
-  if (!user || user.role !== 'owner') {
-    return new Response('Owner only', { status: 403 });
+    const user = getUserById(session.userId);
+    if (!user || (user.role !== 'owner' && user.role !== 'co-owner')) {
+      return NextResponse.json({ success: false, error: 'Owner only' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    
+    // ── FIX: Terima format yang dikirim client ─────────────────────
+    const { 
+      repo,           // Format: "owner/repo" atau pisah owner & repo
+      owner,          // Optional: jika repo sudah format "owner/repo"
+      files,          // Array: [{ path: string, content: string }]
+      message,        // Commit message
+      branch,         // Branch name (main/master/dev) - AUTO DETECTED
+      token           // Optional: ambil dari settings jika tidak dikirim
+    } = body;
+
+    // Parse repo jika format "owner/repo"
+    let repoOwner = owner;
+    let repoName = repo;
+    
+    if (repo && repo.includes('/') && !owner) {
+      [repoOwner, repoName] = repo.split('/');
+    }
+
+    // Validasi field wajib
+    if (!repoOwner || !repoName || !files || !Array.isArray(files)) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields: owner, repo, files' }, 
+        { status: 400 }
+      );
+    }
+
+    // Ambil token dari body atau settings
+    const settings = getSettings();
+    const githubToken = token || settings.githubToken;
+    
+    if (!githubToken) {
+      return NextResponse.json(
+        { success: false, error: 'GitHub token not configured' }, 
+        { status: 400 }
+      );
+    }
+
+    // ── FIX: Gunakan branch dari request atau fallback ke 'main' ───
+    const targetBranch = branch || 'main';
+
+    // ── Execute push to GitHub ─────────────────────────────────────
+    const result = await pushToGithub({
+      token: githubToken,
+      owner: repoOwner,
+      repo: repoName,
+      files,                    // ── FIX: Kirim files array
+      branch: targetBranch,     // ── FIX: Kirim branch name
+      message: message || 'SaturnDashboard: data sync',
+    });
+
+    // Update last push timestamp
+    saveSettings({ 
+      ...settings, 
+      githubToken, 
+      githubOwner: repoOwner, 
+      githubRepo: repoName, 
+      lastPush: new Date().toISOString() 
+    });
+
+    return NextResponse.json({
+      success: result.success,
+      pushed: result.pushed,
+      errors: result.errors || [],
+      message: result.success ? 'Pushed successfully' : result.errors?.join(', ') || 'Unknown error',
+    });
+
+  } catch (err: any) {
+    console.error('[GitHub Push API Error]:', err);
+    return NextResponse.json(
+      { success: false, error: err.message || 'Internal server error' }, 
+      { status: 500 }
+    );
   }
-
-  const body = await req.json();
-  const { token, owner, repo, message } = body;
-
-  if (!token || !owner || !repo) {
-    return new Response('Missing fields', { status: 400 });
-  }
-
-  // Save settings
-  const settings = getSettings();
-  saveSettings({ ...settings, githubToken: token, githubOwner: owner, githubRepo: repo, lastPush: '' });
-
-  const files = getRawDataFiles();
-
-  // SSE stream
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (data: object) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-      };
-
-      try {
-        const result = await pushToGithub({
-          token,
-          owner,
-          repo,
-          files,
-          message: message || 'SaturnDashboard: data sync',
-          onProgress: (percent, log) => {
-            send({ progress: percent, log });
-          },
-        });
-
-        // Update last push timestamp
-        saveSettings({ ...getSettings(), lastPush: new Date().toISOString() });
-
-        send({
-          done: true,
-          success: result.success,
-          pushed: result.pushed,
-          errors: result.errors,
-          error: result.errors.join(', '),
-          progress: 100,
-        });
-      } catch (err) {
-        send({ done: true, success: false, error: String(err), progress: 100 });
-      }
-
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
-  });
 }

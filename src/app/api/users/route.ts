@@ -4,9 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { getSession } from '@/lib/auth';
 import { getUserById, getUsers, getUserByUsername, getUserByEmail, saveUsers } from '@/lib/db';
 import { autoSyncToGithub } from '@/lib/github-auto';
-import type { User } from '@/types';
+import type { User, Role } from '@/types';
 
-/** GET /api/users – list all users (owner/admin only) */
+/** GET /api/users */
 export async function GET() {
   try {
     const session = await getSession();
@@ -15,7 +15,9 @@ export async function GET() {
     const currentUser = getUserById(session.userId);
     if (!currentUser) return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
 
-    if (currentUser.role !== 'owner' && currentUser.role !== 'admin') {
+    // Allow owner, co-owner and admin to list users
+    const allowed = ['owner', 'co-owner', 'admin'];
+    if (!allowed.includes(currentUser.role)) {
       return NextResponse.json({ success: false, error: 'Permission denied' }, { status: 403 });
     }
 
@@ -27,30 +29,37 @@ export async function GET() {
   }
 }
 
-/** POST /api/users – owner creates a new user account (no session cookie set) */
+/** POST /api/users — owner/co-owner creates a new user */
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
     const actor = getUserById(session.userId);
-    if (!actor || actor.role !== 'owner') {
-      return NextResponse.json({ success: false, error: 'Only owners can create accounts' }, { status: 403 });
+    if (!actor || (actor.role !== 'owner' && actor.role !== 'co-owner')) {
+      return NextResponse.json({ success: false, error: 'Only owner/co-owner can create accounts' }, { status: 403 });
     }
 
     const body = await req.json();
     const { username, password, firstName, lastName, email, phone, role, bio, avatar, displayName } = body;
 
-    if (!username || !password || !email) {
+    if (!username || !password || !email)
       return NextResponse.json({ success: false, error: 'Username, password and email are required' }, { status: 400 });
-    }
-    if (username.length < 3) return NextResponse.json({ success: false, error: 'Username min 3 chars' }, { status: 400 });
-    if (password.length < 6) return NextResponse.json({ success: false, error: 'Password min 6 chars' }, { status: 400 });
-    if (getUserByUsername(username)) return NextResponse.json({ success: false, error: 'Username already taken' }, { status: 409 });
-    if (getUserByEmail(email)) return NextResponse.json({ success: false, error: 'Email already registered' }, { status: 409 });
+    if (username.length < 3)
+      return NextResponse.json({ success: false, error: 'Username min 3 chars' }, { status: 400 });
+    if (password.length < 6)
+      return NextResponse.json({ success: false, error: 'Password min 6 chars' }, { status: 400 });
+    if (getUserByUsername(username))
+      return NextResponse.json({ success: false, error: 'Username already taken' }, { status: 409 });
+    if (getUserByEmail(email))
+      return NextResponse.json({ success: false, error: 'Email already registered' }, { status: 409 });
 
-    const allowedRoles = ['user', 'admin', 'developer'];
-    const assignedRole = allowedRoles.includes(role) ? role : 'user';
+    // ── Role whitelist ─────────────────────────────────────────────────
+    // Only owner can create co-owner; co-owner can create up to admin
+    const baseAllowed: Role[] = ['user', 'developer', 'admin'];
+    const ownerAllowed: Role[] = ['user', 'developer', 'admin', 'co-owner'];
+    const allowed = actor.role === 'owner' ? ownerAllowed : baseAllowed;
+    const assignedRole: Role = allowed.includes(role as Role) ? (role as Role) : 'user';
 
     const hashed = await bcrypt.hash(password, 10);
     const now = new Date().toISOString();
@@ -76,7 +85,6 @@ export async function POST(req: NextRequest) {
     users.push(newUser);
     saveUsers(users);
 
-    // Auto-sync to GitHub
     await autoSyncToGithub(`Add user: ${newUser.username}`);
 
     const { password: _p, ...pub } = newUser;

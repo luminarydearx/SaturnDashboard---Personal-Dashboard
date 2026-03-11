@@ -9,12 +9,12 @@ export const metadata: Metadata = { title: 'User Management' };
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams: { highlight?: string };
+  searchParams: Promise<{ highlight?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect('/');
   const user = getUserById(session.userId);
   if (!user || (user.role !== 'owner' && user.role !== 'admin')) redirect('/dashboard');
   const { password: _p, ...publicUser } = user;
-  return <UsersClient currentUser={publicUser} highlightId={searchParams?.highlight} />;
+  return <UsersClient currentUser={publicUser} highlightId={(await searchParams)?.highlight} />;
 }

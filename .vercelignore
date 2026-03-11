@@ -1,0 +1,7 @@
+node_modules
+.next
+electron
+dist-electron
+*.zip
+data/
+.env.local

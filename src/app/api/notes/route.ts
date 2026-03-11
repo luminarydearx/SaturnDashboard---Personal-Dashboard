@@ -14,15 +14,12 @@ export async function GET() {
 
   let notes = getNotes();
 
-  // Filter by role
-  if (user.role === 'owner') {
-    // See all (including hidden)
+  if (user.role === 'owner' || user.role === 'co-owner') {
+    // owner & co-owner see ALL notes including hidden
   } else if (user.role === 'admin') {
-    // See own + all user notes, exclude hidden unless author
-    notes = notes.filter((n) => !n.hidden || n.authorId === user.id);
+    notes = notes.filter(n => !n.hidden || n.authorId === user.id);
   } else {
-    // See own notes only (non-hidden)
-    notes = notes.filter((n) => n.authorId === user.id && !n.hidden);
+    notes = notes.filter(n => n.authorId === user.id && !n.hidden);
   }
 
   return NextResponse.json({ success: true, data: notes });
@@ -46,9 +43,7 @@ export async function POST(req: NextRequest) {
     id: uuidv4(),
     title: title.trim(),
     content: content?.trim() || '',
-    images,
-    tags,
-    color,
+    images, tags, color,
     authorId: user.id,
     authorName: user.username,
     authorRole: user.role,

@@ -63,6 +63,12 @@ function addRecentNote(note: RecentNote): void {
     localStorage.setItem(RECENT_LS, JSON.stringify(list.slice(0, 500)));
   } catch {}
 }
+function removeRecentNote(id: string): void {
+  try {
+    const list = getRecentNotes().filter(n => n.id !== id);
+    localStorage.setItem(RECENT_LS, JSON.stringify(list));
+  } catch {}
+}
 
 function groupByMonth(notes: RecentNote[]): Record<string, RecentNote[]> {
   const map: Record<string, RecentNote[]> = {};
@@ -143,7 +149,7 @@ function NotePreview({ note, currentUser, onClose, onEdit, onDelete }: {
 }
 
 // ── Recent notes panel ────────────────────────────────────────────────────
-function RecentPanel({ onClose }: { onClose: () => void }) {
+function RecentPanel({ onClose, onUndone }: { onClose: () => void; onUndone: (id: string) => void }) {
   const [recentNotes, setRecentNotes] = useState<RecentNote[]>([]);
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
 
@@ -197,7 +203,7 @@ function RecentPanel({ onClose }: { onClose: () => void }) {
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden">
                     {grouped[month].map(n => (
-                      <div key={n.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-[var(--c-surface)] transition-colors">
+                      <div key={n.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-[var(--c-surface)] transition-colors group">
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${NOTE_DOT[n.color] || "bg-violet-500"}`} />
                         <div className="flex-1 min-w-0">
                           <p className="text-[var(--c-text)] text-sm font-medium truncate">{n.title}</p>
@@ -205,7 +211,18 @@ function RecentPanel({ onClose }: { onClose: () => void }) {
                             Done: {format(new Date(n.doneAt), "dd MMM yyyy · HH:mm")}
                           </p>
                         </div>
-                        <MdCheckCircle size={14} className="text-emerald-400 flex-shrink-0" />
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <MdCheckCircle size={14} className="text-emerald-400" />
+                          <button
+                            onClick={() => {
+                              removeRecentNote(n.id);
+                              onUndone(n.id);
+                              setRecentNotes(getRecentNotes());
+                            }}
+                            title="Cancel done — remove from recent"
+                            className="ml-1 p-1 rounded-lg text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 transition-all"
+                          ><MdClose size={13} /></button>
+                        </div>
                       </div>
                     ))}
                   </motion.div>
@@ -231,6 +248,8 @@ export default function NotesClient({ user, highlightId }: { user: PublicUser; h
   const [deletingId,   setDeletingId]   = useState<string | null>(null);
   const [showRecent,   setShowRecent]   = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(highlightId ?? null);
+  const [doneTarget,    setDoneTarget]    = useState<Note | null>(null);
+  const [doneLoading,   setDoneLoading]   = useState(false);
 
   // Session-persisted search/filter
   const [search,      setSearch]      = useSessionState("notes_search", "");
@@ -309,18 +328,30 @@ export default function NotesClient({ user, highlightId }: { user: PublicUser; h
   };
 
   const handleToggleDone = async (note: Note) => {
-    const nowDone = !note.done;
-    const res = await fetch(`/api/notes/${note.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done: nowDone }) });
+    if (!note.done) {
+      // Need confirm before marking as done
+      setDoneTarget(note);
+      return;
+    }
+    // Undo done — direct, no confirm needed
+    const res = await fetch(`/api/notes/${note.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done: false }) });
     const d   = await res.json();
-    if (d.success) {
-      if (nowDone) {
-        addRecentNote({ id: note.id, title: note.title, color: note.color, doneAt: new Date().toISOString() });
-        success("✓ Marked as done! Will auto-delete in 24h");
-      } else {
-        success("Marked as undone");
-      }
-      await fetchNotes();
-    } else toastError(d.error);
+    if (d.success) { success("Marked as undone"); await fetchNotes(); }
+    else toastError(d.error);
+  };
+
+  const confirmDone = async () => {
+    if (!doneTarget) return;
+    setDoneLoading(true);
+    try {
+      const res = await fetch(`/api/notes/${doneTarget.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done: true }) });
+      const d   = await res.json();
+      if (d.success) {
+        addRecentNote({ id: doneTarget.id, title: doneTarget.title, color: doneTarget.color, doneAt: new Date().toISOString() });
+        success("✓ Note marked as done!");
+        await fetchNotes();
+      } else toastError(d.error);
+    } finally { setDoneTarget(null); setDoneLoading(false); }
   };
 
   const COLORS  = ["all", "violet", "cyan", "pink", "amber", "teal", "blue"];
@@ -427,11 +458,25 @@ export default function NotesClient({ user, highlightId }: { user: PublicUser; h
           onEdit={() => { setEditNote(previewNote); setPreviewNote(null); }}
           onDelete={() => { setDeleteTarget(previewNote.id); setPreviewNote(null); }} />
       )}
-      {showRecent && <RecentPanel onClose={() => setShowRecent(false)} />}
+      {showRecent && <RecentPanel onClose={() => setShowRecent(false)}
+        onUndone={async (id) => {
+          // Undo the done state on the server
+          const res = await fetch(`/api/notes/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done: false }) });
+          const d = await res.json();
+          if (d.success) { success("Done cancelled ✓"); await fetchNotes(); }
+          else toastError(d.error || "Failed");
+        }} />}
 
       <ConfirmModal isOpen={deleteTarget !== null} title="Delete Note?" message="This action cannot be undone."
         type="danger" confirmText="Delete Note" cancelText="Keep"
         onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)} isLoading={deletingId !== null} />
+
+      <ConfirmModal
+        isOpen={doneTarget !== null}
+        title={`Mark as Done?`}
+        message={doneTarget ? `"${doneTarget.title}" will be marked as done and auto-deleted in 24h. You can cancel from Recent.` : ""}
+        type="success" confirmText="Mark Done" cancelText="Cancel"
+        onConfirm={confirmDone} onCancel={() => setDoneTarget(null)} isLoading={doneLoading} />
     </div>
   );
 }

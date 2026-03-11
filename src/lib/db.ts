@@ -2,7 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import type { User, Note, BackupEntry } from '@/types';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+// On Vercel (serverless), file writes go to /tmp — ephemeral but functional.
+// For production persistence, use a database (Vercel Postgres, PlanetScale, etc).
+const IS_VERCEL = process.env.VERCEL === '1';
+const DATA_DIR = IS_VERCEL
+  ? '/tmp/saturn-data'
+  : path.join(process.cwd(), 'data');
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });

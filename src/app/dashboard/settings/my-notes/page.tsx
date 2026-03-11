@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'My Notes' };
 export default async function MyNotesPage({
   searchParams,
 }: {
-  searchParams: { highlight?: string };
+  searchParams: Promise<{ highlight?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect('/');
@@ -25,7 +25,7 @@ export default async function MyNotesPage({
     <MyNotesClient
       user={publicUser}
       initialNotes={myNotes}
-      highlightId={searchParams?.highlight}
+      highlightId={(await searchParams)?.highlight}
     />
   );
 }

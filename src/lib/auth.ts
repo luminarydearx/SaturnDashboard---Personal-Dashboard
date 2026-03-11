@@ -26,15 +26,16 @@ export async function verifyToken(token: string): Promise<AuthSession | null> {
   }
 }
 
+// ── Next.js 15/16: cookies() is now async — must be awaited ──────────────
 export async function getSession(): Promise<AuthSession | null> {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
   return verifyToken(token);
 }
 
 export async function setSessionCookie(token: string): Promise<void> {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -45,6 +46,6 @@ export async function setSessionCookie(token: string): Promise<void> {
 }
 
 export async function clearSessionCookie(): Promise<void> {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.delete(COOKIE_NAME);
 }

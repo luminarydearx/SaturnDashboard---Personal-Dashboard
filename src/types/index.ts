@@ -16,6 +16,8 @@ export interface User {
   bannedBy?: string;
   bannedAt?: string;
   bannedReason?: string;
+  bannedByDisplayName?: string;
+  bannedByRole?: Role;
   createdAt: string;
   updatedAt: string;
 }

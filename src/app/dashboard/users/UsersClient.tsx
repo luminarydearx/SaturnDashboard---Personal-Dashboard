@@ -430,6 +430,56 @@ function EditUserModal({ target, onClose, onSaved }: EditModalProps) {
   );
 }
 
+/* ── Edit Ban Reason Modal ── */
+function EditBanReasonModal({ target, onClose, onSaved }: { target: PublicUser; onClose: () => void; onSaved: () => void }) {
+  const [reason,  setReason]  = useState(target.bannedReason || "");
+  const [loading, setLoading] = useState(false);
+  const { success, error: toastError } = useToast();
+
+  const handle = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/users/${target.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "updateBanReason", reason }),
+      });
+      const d = await res.json();
+      if (d.success) { success("Ban reason updated ✓"); onSaved(); }
+      else throw new Error(d.error || "Failed");
+    } catch (err: any) { toastError(err.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <Modal open onClose={loading ? undefined : onClose}>
+      <div className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl"
+        style={{ background: "var(--dropdown-bg)", border: "1px solid var(--c-border)" }}>
+        <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: "var(--c-border)" }}>
+          <MdEdit size={18} className="text-amber-400" />
+          <h2 className="font-orbitron text-sm font-bold text-[var(--c-text)] flex-1">Edit Ban Reason</h2>
+          <p className="text-xs text-[var(--c-muted)]">@{target.username}</p>
+          <button onClick={onClose} disabled={loading} className="text-[var(--c-muted)] hover:text-[var(--c-text)] p-1 ml-2"><MdClose size={18} /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="block text-[var(--c-muted)] text-xs font-semibold uppercase tracking-wider mb-2">Ban Reason</label>
+            <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3}
+              placeholder="Enter reason for ban…"
+              className="saturn-input resize-none w-full focus:outline-none"
+              style={{ paddingLeft: "16px" }} />
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} disabled={loading} className="btn-secondary flex-1">Cancel</button>
+            <button onClick={handle} disabled={loading} className="btn-primary flex-1">
+              {loading ? <><MdRefresh className="animate-spin" size={16} /> Saving…</> : <><MdSave size={16} /> Save Reason</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 /* ── Ban Modal ── */
 function BanModal({ target, onClose, onConfirm }: {
   target: PublicUser; onClose: () => void; onConfirm: (reason: string) => Promise<void>;
@@ -486,6 +536,11 @@ export default function UsersClient({ currentUser, highlightId }: { currentUser:
   const [editTarget,    setEditTarget]    = useState<PublicUser | null>(null);
   const [addUserOpen,   setAddUserOpen]   = useState(false);
   const [deleteTarget,  setDeleteTarget]  = useState<PublicUser | null>(null);
+  const [promoteTarget, setPromoteTarget] = useState<PublicUser | null>(null);
+  const [demoteTarget,  setDemoteTarget]  = useState<PublicUser | null>(null);
+  const [unbanTarget,   setUnbanTarget]   = useState<PublicUser | null>(null);
+  const [editReasonTarget, setEditReasonTarget] = useState<PublicUser | null>(null);
+  const [actionConfirmLoading, setActionConfirmLoading] = useState(false);
   const [deletingId,    setDeletingId]    = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(highlightId ?? null);
@@ -636,14 +691,17 @@ export default function UsersClient({ currentUser, highlightId }: { currentUser:
                           <button onClick={() => setEditTarget(u)} title="Edit" className="p-1.5 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"><MdEdit size={15} /></button>
                         )}
                         {currentUser.role === "owner" && u.role === "user" && (
-                          <button onClick={() => doAction(u.id, "promote")} title="Promote to Admin" className="p-1.5 rounded-lg text-cyan-400 hover:bg-cyan-500/10 transition-colors"><MdArrowUpward size={15} /></button>
+                          <button onClick={() => setPromoteTarget(u)} title="Promote to Admin" className="p-1.5 rounded-lg text-cyan-400 hover:bg-cyan-500/10 transition-colors"><MdArrowUpward size={15} /></button>
                         )}
                         {currentUser.role === "owner" && u.role === "admin" && (
-                          <button onClick={() => doAction(u.id, "demote")} title="Demote to User" className="p-1.5 rounded-lg text-amber-400 hover:bg-amber-500/10 transition-colors"><MdArrowDownward size={15} /></button>
+                          <button onClick={() => setDemoteTarget(u)} title="Demote to User" className="p-1.5 rounded-lg text-amber-400 hover:bg-amber-500/10 transition-colors"><MdArrowDownward size={15} /></button>
                         )}
                         {!u.banned
                           ? <button onClick={() => setBanTarget(u)} title="Ban" className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"><MdBlock size={15} /></button>
-                          : <button onClick={() => doAction(u.id, "unban")} title="Unban" className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition-colors"><MdCheckCircle size={15} /></button>}
+                          : <div className="flex items-center gap-0.5">
+                              <button onClick={() => setUnbanTarget(u)} title="Unban" className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition-colors"><MdCheckCircle size={15} /></button>
+                              <button onClick={() => setEditReasonTarget(u)} title="Edit Ban Reason" className="p-1.5 rounded-lg text-amber-400 hover:bg-amber-500/10 transition-colors"><MdEdit size={15} /></button>
+                            </div>}
                         {currentUser.role === "owner" && (
                           <button onClick={() => setDeleteTarget(u)} title="Delete" className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors"><MdDelete size={15} /></button>
                         )}
@@ -669,6 +727,47 @@ export default function UsersClient({ currentUser, highlightId }: { currentUser:
         message="This account will be permanently deleted."
         type="danger" confirmText="Delete User" cancelText="Keep"
         onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)} isLoading={deletingId !== null} />
+
+      <ConfirmModal isOpen={promoteTarget !== null}
+        title={`Promote ${promoteTarget?.displayName}?`}
+        message={`${promoteTarget?.username} will be promoted from User to Admin.`}
+        type="info" confirmText="Promote" cancelText="Cancel"
+        onConfirm={async () => {
+          if (!promoteTarget) return;
+          setActionConfirmLoading(true);
+          await doAction(promoteTarget.id, "promote");
+          setPromoteTarget(null); setActionConfirmLoading(false);
+        }}
+        onCancel={() => setPromoteTarget(null)} isLoading={actionConfirmLoading} />
+
+      <ConfirmModal isOpen={demoteTarget !== null}
+        title={`Demote ${demoteTarget?.displayName}?`}
+        message={`${demoteTarget?.username} will be demoted from Admin to User.`}
+        type="warning" confirmText="Demote" cancelText="Cancel"
+        onConfirm={async () => {
+          if (!demoteTarget) return;
+          setActionConfirmLoading(true);
+          await doAction(demoteTarget.id, "demote");
+          setDemoteTarget(null); setActionConfirmLoading(false);
+        }}
+        onCancel={() => setDemoteTarget(null)} isLoading={actionConfirmLoading} />
+
+      <ConfirmModal isOpen={unbanTarget !== null}
+        title={`Unban ${unbanTarget?.displayName}?`}
+        message={`${unbanTarget?.username} will regain full access to the dashboard.`}
+        type="success" confirmText="Unban" cancelText="Cancel"
+        onConfirm={async () => {
+          if (!unbanTarget) return;
+          setActionConfirmLoading(true);
+          await doAction(unbanTarget.id, "unban");
+          setUnbanTarget(null); setActionConfirmLoading(false);
+        }}
+        onCancel={() => setUnbanTarget(null)} isLoading={actionConfirmLoading} />
+
+      {editReasonTarget && <EditBanReasonModal
+        target={editReasonTarget}
+        onClose={() => setEditReasonTarget(null)}
+        onSaved={() => { setEditReasonTarget(null); fetchUsers(); }} />}
     </div>
   );
 }

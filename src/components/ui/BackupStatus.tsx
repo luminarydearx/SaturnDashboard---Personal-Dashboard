@@ -21,7 +21,7 @@ function timeAgo(iso: string | null): string {
 }
 
 interface Props {
-  autoTrigger?: boolean; // true = show prompt if backup is due
+  autoTrigger?: boolean;
 }
 
 export default function BackupStatus({ autoTrigger = true }: Props) {
@@ -31,14 +31,37 @@ export default function BackupStatus({ autoTrigger = true }: Props) {
   const [running,    setRunning]    = useState<null | "local" | "github" | "full">(null);
   const [log,        setLog]        = useState<string[]>([]);
   const [done,       setDone]       = useState(false);
+  
+  // ── FIX: State untuk menghindari hydration mismatch ─────────
+  const [isClientReady, setIsClientReady] = useState(false);
+  const [backupDue, setBackupDue] = useState(false);
+  // ───────────────────────────────────────────────────────────
 
-  const refresh = useCallback(() => setStatus(getBackupStatus()), []);
+  const refresh = useCallback(() => {
+    try {
+      setStatus(getBackupStatus());
+    } catch (e) {
+      console.error('Failed to get backup status:', e);
+    }
+  }, []);
 
   useEffect(() => {
+    // ── FIX: Tandai bahwa client sudah ready ──────────────────
+    setIsClientReady(true);
+    
     refresh();
-    if (autoTrigger && isBackupDue()) {
-      const t = setTimeout(() => setShowPrompt(true), 4000);
-      return () => clearTimeout(t);
+    
+    // ── FIX: Hitung isBackupDue hanya di client ───────────────
+    try {
+      const due = isBackupDue();
+      setBackupDue(due);
+      
+      if (autoTrigger && due) {
+        const t = setTimeout(() => setShowPrompt(true), 4000);
+        return () => clearTimeout(t);
+      }
+    } catch (e) {
+      console.error('Failed to check backup due:', e);
     }
   }, [autoTrigger, refresh]);
 
@@ -47,31 +70,58 @@ export default function BackupStatus({ autoTrigger = true }: Props) {
   const handleFull = async () => {
     setRunning("full"); setDone(false); setLog([]);
     addLog("⏳ Starting full backup…");
-    await runFullBackup((step, success, err) => {
-      if (step === "local")  addLog(success ? "✅ Local ZIP downloaded" : `❌ Local: ${err}`);
-      if (step === "github") addLog(success ? "✅ Pushed to GitHub"     : `⚠️ GitHub: ${err}`);
-    });
-    setRunning(null); setDone(true); refresh();
-    setShowPrompt(false);
+    try {
+      await runFullBackup((step, success, err) => {
+        if (step === "local")  addLog(success ? "✅ Local ZIP downloaded" : `❌ Local: ${err}`);
+        if (step === "github") addLog(success ? "✅ Pushed to GitHub"     : `⚠️ GitHub: ${err}`);
+      });
+      setDone(true);
+    } catch (e: any) {
+      addLog(`❌ Error: ${e.message || 'Unknown error'}`);
+    } finally {
+      setRunning(null);
+      refresh();
+      setShowPrompt(false);
+    }
   };
 
   const handleLocal = async () => {
     setRunning("local");
     addLog("⏳ Downloading local backup…");
-    await downloadLocalBackup();
-    addLog("✅ ZIP downloaded to your device");
-    setRunning(null); refresh();
+    try {
+      await downloadLocalBackup();
+      addLog("✅ ZIP downloaded to your device");
+    } catch (e: any) {
+      addLog(`❌ Error: ${e.message || 'Unknown error'}`);
+    } finally {
+      setRunning(null);
+      refresh();
+    }
   };
 
   const handleGithub = async () => {
     setRunning("github");
     addLog("⏳ Pushing to GitHub…");
-    const r = await pushGithubBackup();
-    addLog(r.success ? "✅ Backup pushed to GitHub" : `❌ ${r.error}`);
-    setRunning(null); refresh();
+    try {
+      const r = await pushGithubBackup();
+      addLog(r.success ? "✅ Backup pushed to GitHub" : `❌ ${r.error}`);
+    } catch (e: any) {
+      addLog(`❌ Error: ${e.message || 'Unknown error'}`);
+    } finally {
+      setRunning(null);
+      refresh();
+    }
   };
 
   const isRunning = running !== null;
+
+  // ── FIX: Gunakan conditional rendering untuk menghindari hydration mismatch ──
+  // Sebelum client ready, render button dengan className default (tanpa pulse)
+  const buttonClassName = `fixed bottom-6 left-6 z-[7999] w-10 h-10 rounded-xl flex items-center justify-center
+    shadow-lg transition-all duration-300 border
+    ${isClientReady && backupDue 
+      ? "bg-amber-500/20 text-amber-400 border-amber-500/40 animate-pulse" 
+      : "bg-[var(--c-surface)] text-[var(--c-muted)] border-[var(--c-border)] hover:text-[var(--c-text)]"}`;
 
   return (
     <>
@@ -99,7 +149,7 @@ export default function BackupStatus({ autoTrigger = true }: Props) {
             <div className="p-4 space-y-2">
               <p className="text-[var(--c-muted)] text-xs">Auto backup runs every 24 hours. Back up now?</p>
               <div className="flex gap-2">
-                <button onClick={handleFull} className="flex-1 btn-primary py-2 text-xs justify-center">
+                <button onClick={handleFull} disabled={isRunning} className="flex-1 btn-primary py-2 text-xs justify-center">
                   <MdBackup size={14} /> Backup Now
                 </button>
                 <button onClick={() => { setShowPrompt(false); setOpen(true); }}
@@ -117,9 +167,7 @@ export default function BackupStatus({ autoTrigger = true }: Props) {
       <button
         onClick={() => { setOpen(true); refresh(); setLog([]); setDone(false); }}
         title="Backup Manager"
-        className={`fixed bottom-6 left-6 z-[7999] w-10 h-10 rounded-xl flex items-center justify-center
-          shadow-lg transition-all duration-300 border
-          ${isBackupDue() ? "bg-amber-500/20 text-amber-400 border-amber-500/40 animate-pulse" : "bg-[var(--c-surface)] text-[var(--c-muted)] border-[var(--c-border)] hover:text-[var(--c-text)]"}`}>
+        className={buttonClassName}>
         <MdBackup size={18} />
       </button>
 

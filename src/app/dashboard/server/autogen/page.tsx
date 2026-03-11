@@ -1,20 +1,16 @@
 import { getSession } from '@/lib/auth';
 import { getUserById } from '@/lib/db';
 import { redirect } from 'next/navigation';
-import NotesClient from './NotesClient';
-
+import AutoGenClient from './AutoGenClient';
 import type { Metadata } from 'next';
-export const metadata: Metadata = { title: 'All Notes' };
+export const metadata: Metadata = { title: 'AutoGen' };
 
-export default async function NotesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ highlight?: string }>;
-}) {
+export default async function AutoGenPage() {
   const session = await getSession();
   if (!session) redirect('/');
+  if (session.role !== 'owner' && session.role !== 'co-owner') redirect('/dashboard');
   const user = getUserById(session.userId);
   if (!user) redirect('/');
   const { password: _p, ...publicUser } = user;
-  return <NotesClient user={publicUser} highlightId={(await searchParams)?.highlight} />;
+  return <AutoGenClient user={publicUser} />;
 }

@@ -10,7 +10,7 @@ import {
   MdDashboard, MdNotes, MdPerson, MdPeople, MdSettings,
   MdClose, MdChevronRight, MdChevronLeft, MdExpandMore,
   MdBackup, MdStorage, MdDns, MdPalette, MdApps, MdBookmark,
-  MdComputer
+  MdComputer, MdCode, MdLock
 } from 'react-icons/md';
 import { IoRocketSharp } from 'react-icons/io5';
 
@@ -60,7 +60,7 @@ const NAV_ITEMS = [
  *   { href: '/dashboard/server/status', label: 'Status', icon: MdStorage, roles: ['owner','co-owner'] },
  */
 const WEB_SERVER_ITEMS: { href: string; label: string; icon: React.ElementType; roles: string[] }[] = [
-  // ← tambahkan item web server kamu di sini
+  { href: '/dashboard/server/autogen', label: 'Auto Gen', icon: MdCode, roles: ['owner','co-owner'] },
 ];
 
 const SERVER_ITEMS = [
@@ -320,28 +320,20 @@ export default function Sidebar({ user, open, onClose, collapsed, onToggleCollap
             <NavItem key={item.href} href={item.href} label={item.label} icon={item.icon} {...navItemProps} />
           ))}
 
-          {/* ── WEB SERVER ── */}
-          <SectionHeader
-            label="Web Server"
-            icon={MdDns}
-            open={webOpen}
-            onToggle={() => setWebOpen(!webOpen)}
-            collapsed={collapsed}
-          />
-          {(collapsed || webOpen) && (
-            filteredWeb.length > 0
-              ? filteredWeb.map(item => (
-                  <NavItem key={item.href} href={item.href} label={item.label} icon={item.icon} {...navItemProps} />
-                ))
-              : !collapsed && (
-                  <div
-                    className="px-3 py-3 rounded-xl mx-0.5 mb-1"
-                    style={{ background: 'var(--c-surface)', border: '1px dashed var(--c-border)' }}
-                  >
-                    <p className="text-[var(--c-muted)] text-[11px] text-center opacity-50">Belum ada item</p>
-                    <p className="text-[var(--c-muted)] text-[10px] text-center opacity-30 mt-0.5">Edit WEB_SERVER_ITEMS di Sidebar.tsx</p>
-                  </div>
-                )
+          {/* ── WEB SERVER — owner & co-owner only ── */}
+          {(role === 'owner' || role === 'co-owner') && filteredWeb.length > 0 && (
+            <>
+              <SectionHeader
+                label="Web Server"
+                icon={MdDns}
+                open={webOpen}
+                onToggle={() => setWebOpen(!webOpen)}
+                collapsed={collapsed}
+              />
+              {(collapsed || webOpen) && filteredWeb.map(item => (
+                <NavItem key={item.href} href={item.href} label={item.label} icon={item.icon} {...navItemProps} />
+              ))}
+            </>
           )}
 
           {/* ── SERVER ── */}

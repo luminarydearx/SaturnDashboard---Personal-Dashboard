@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // ── Image domains ─────────────────────────────────────────────
+  // ── Images ─────────────────────────────────────────────────────────────
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'res.cloudinary.com', pathname: '/dg3awuzug/**' },
@@ -8,54 +8,32 @@ const nextConfig = {
     ],
   },
 
-  // ── Experimental (Next.js 14 compatible) ─────────────────────
+  // ── Next.js 15/16: external packages for Server Components ─────────────
+  serverExternalPackages: ['bcryptjs'],
+
+  // ── Turbopack (Next.js 16 default bundler) ──────────────────────────────
+  // Empty object = let Turbopack auto-configure everything
+  turbopack: {},
+
+  // ── Performance ─────────────────────────────────────────────────────────
   experimental: {
-    // Faster package imports — avoids full barrel-file traversal
-    optimizePackageImports: [
-      'react-icons',
-      'framer-motion',
-      'date-fns',
-      'lucide-react',
-    ],
-    // Fix bcryptjs in Server Components (Next.js 14 key)
-    serverComponentsExternalPackages: ['bcryptjs'],
+    optimizePackageImports: ['react-icons', 'framer-motion', 'date-fns'],
   },
 
-  // ── Webpack tweaks ────────────────────────────────────────────
-  webpack: (config, { dev, isServer }) => {
-    // Silence node built-in warnings
-    config.externals = [...(config.externals || []), { 'node:fs': 'commonjs fs' }];
-
-    // In production builds, minimize client bundle further
-    if (!dev && !isServer) {
-      config.optimization = {
-        ...config.optimization,
-        splitChunks: {
-          chunks: 'all',
-          cacheGroups: {
-            vendor: {
-              test: /[\\/]node_modules[\\/]/,
-              name: 'vendors',
-              chunks: 'all',
-            },
-          },
-        },
-      };
-    }
-
-    return config;
-  },
-
-  // ── Compiler tweaks ───────────────────────────────────────────
+  // ── Production compiler ─────────────────────────────────────────────────
   compiler: {
-    // Strip console.* in production
     removeConsole: process.env.NODE_ENV === 'production'
       ? { exclude: ['error', 'warn'] }
       : false,
   },
 
-  // ── Output & poweredBy ────────────────────────────────────────
   poweredByHeader: false,
+
+  // ── Vercel: standalone output preserves /data folder access ────────────
+  // NOTE: On Vercel, fs writes go to /tmp (ephemeral). For persistent data,
+  // use a database (Vercel Postgres, PlanetScale, etc).
+  // For local/Electron use: data/ folder works normally.
+  output: process.env.VERCEL ? 'standalone' : undefined,
 };
 
 module.exports = nextConfig;

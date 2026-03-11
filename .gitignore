@@ -41,3 +41,7 @@ dist-electron/
 .vscode/
 *.swp
 *.swo
+
+# File that contains version info --- IGNORE ---
+note.txt
+*.zip
