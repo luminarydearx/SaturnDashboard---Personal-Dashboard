@@ -5,8 +5,8 @@ import Image from 'next/image';
 import { MdUpload, MdContentCopy, MdDelete, MdCheck, MdImage } from 'react-icons/md';
 import { useToast } from './Toast';
 
-const CLOUD_NAME = 'dg3awuzug';
-const UPLOAD_PRESET = 'ml_default';
+const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dg3awuzug';
+const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
 
 interface UploadedImage {
   url: string;

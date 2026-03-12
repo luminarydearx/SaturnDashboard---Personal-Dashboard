@@ -27,8 +27,8 @@ function useSessionState<T>(key: string, def: T): [T, (v: T) => void] {
 }
 
 
-const CLOUD_NAME    = "dg3awuzug";
-const UPLOAD_PRESET = "ml_default";
+const CLOUD_NAME    = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "dg3awuzug";
+const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "ml_default";
 
 async function uploadToCloudinary(file: File, onProgress?: (p: number) => void): Promise<string | null> {
   const fd = new FormData();

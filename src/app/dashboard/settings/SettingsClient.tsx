@@ -111,8 +111,8 @@ export default function SettingsClient({ user: _user, settings }: SettingsClient
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <InfoBox label="Cloud Name" value="dg3awuzug" />
-          <InfoBox label="Upload Preset" value="ml_default" />
+          <InfoBox label="Cloud Name" value={process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "dg3awuzug"} />
+          <InfoBox label="Upload Preset" value={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "ml_default"} />
         </div>
       </div>
 

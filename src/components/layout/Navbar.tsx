@@ -1,17 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { PublicUser } from "@/types";
-import { useTheme } from "@/components/ui/ThemeContext";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
 import {
-  MdMenu, MdLogout, MdPerson, MdSettings, MdClose, MdSearch,
-  MdDarkMode, MdLightMode, MdBrightnessMedium, MdChevronRight,
-  MdWarning, MdAccessTime,
+  MdMenu, MdClose, MdSearch, MdAccessTime,
 } from "react-icons/md";
 
 // ── Search registry — all searchable sections live here ──────────────────
@@ -178,23 +173,16 @@ function SearchResults({ data, query, onClose, onNavigate }: {
 
 // ── Main Navbar ───────────────────────────────────────────────────────────
 export default function Navbar({ user, onMenuClick, onToggleSidebar }: NavbarProps) {
-  const [dropOpen,          setDropOpen]          = useState(false);
   const [searchQ,           setSearchQ]           = useState("");
   const [searchFocus,       setSearchFocus]       = useState(false);
   const [results,           setResults]           = useState<SearchData | null>(null);
   const [searching,         setSearching]         = useState(false);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  const { theme, setTheme } = useTheme();
-  const router    = useRouter();
-  const dropRef   = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLInputElement>(null);
   const debounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const router    = useRouter();
 
-  const ROLE_CLR: Record<string, string> = {
-    owner: "text-amber-400", admin: "text-cyan-400", developer: "text-violet-400", user: "text-slate-400",
-  };
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -202,7 +190,6 @@ export default function Navbar({ user, onMenuClick, onToggleSidebar }: NavbarPro
       const typing = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable;
       if (!typing && e.key === "/") { e.preventDefault(); onToggleSidebar?.(); }
       if (!typing && (e.key === "f" || e.key === "F")) { e.preventDefault(); setTimeout(() => inputRef.current?.focus(), 50); }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "l") { e.preventDefault(); handleLogoutRequest(); }
       if (e.key === "Escape") { setSearchQ(""); setResults(null); setSearchFocus(false); (e.target as HTMLElement)?.blur?.(); }
     };
     window.addEventListener("keydown", h);
@@ -227,21 +214,12 @@ export default function Navbar({ user, onMenuClick, onToggleSidebar }: NavbarPro
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (dropRef.current   && !dropRef.current.contains(e.target as Node))   setDropOpen(false);
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) setSearchFocus(false);
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const handleLogoutRequest = () => { setDropOpen(false); setShowLogoutConfirm(true); };
-  const confirmLogout = async () => {
-    setShowLogoutConfirm(false);
-    const id = toast.loading("Signing out…");
-    await fetch("/api/auth/logout", { method: "POST" });
-    toast.success("Signed out!", { id });
-    setTimeout(() => { router.push("/"); router.refresh(); }, 600);
-  };
 
   const clearSearch = () => { setSearchQ(""); setResults(null); };
   const showDrop    = searchFocus && searchQ.length >= 2;
@@ -337,106 +315,8 @@ export default function Navbar({ user, onMenuClick, onToggleSidebar }: NavbarPro
           </AnimatePresence>
         </div>
 
-        {/* ── Profile dropdown ── */}
-        <div ref={dropRef} className="relative flex-shrink-0">
-          <button onClick={() => setDropOpen(o => !o)}
-            className="flex items-center gap-1.5 sm:gap-2 px-1.5 py-1 rounded-xl hover:bg-[var(--c-surface)] transition-colors border border-transparent hover:border-[var(--c-border)]">
-            <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden bg-gradient-to-br from-violet-600 to-cyan-600 flex-shrink-0 border border-white/10">
-              {user.avatar
-                ? <Image src={user.avatar} alt={user.displayName} fill className="object-cover" sizes="36px" />
-                : <div className="w-full h-full flex items-center justify-center text-white font-bold text-sm select-none">{(user.displayName||user.username)[0].toUpperCase()}</div>
-              }
-            </div>
-            <span className="text-sm font-semibold text-[var(--c-text)] hidden sm:block font-nunito max-w-[6rem] truncate">
-              {user.displayName || user.username}
-            </span>
-          </button>
-
-          <AnimatePresence>
-            {dropOpen && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 8 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{    opacity: 0, scale: 0.95, y: 8 }}
-                className="absolute right-0 top-full mt-2 w-64 rounded-2xl z-[999] overflow-hidden shadow-2xl"
-                style={{ background: "var(--dropdown-bg)", border: "1px solid var(--c-border)" }}
-              >
-                <div className="px-4 py-3 border-b flex flex-col" style={{ borderColor: "var(--c-border)" }}>
-                  <span className="text-[var(--c-text)] font-bold text-sm truncate">{user.displayName || user.username}</span>
-                  <span className="text-[10px] text-[var(--c-muted)] font-mono">
-                    @{user.username} · <span className={ROLE_CLR[user.role] || "text-violet-400"}>{user.role}</span>
-                  </span>
-                </div>
-                <div className="p-2 space-y-0.5">
-                  <Link href="/dashboard/profile" onClick={() => setDropOpen(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--c-surface)] transition-colors">
-                    <MdPerson size={18} className="text-violet-400" />
-                    <span className="text-[var(--c-text)] font-medium text-sm flex-1">My Profile</span>
-                    <MdChevronRight size={14} className="text-[var(--c-muted)] opacity-50" />
-                  </Link>
-                  {user.role === "owner" && (
-                    <Link href="/dashboard/settings" onClick={() => setDropOpen(false)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--c-surface)] transition-colors">
-                      <MdSettings size={18} className="text-cyan-400" />
-                      <span className="text-[var(--c-text)] font-medium text-sm flex-1">Settings</span>
-                      <MdChevronRight size={14} className="text-[var(--c-muted)] opacity-50" />
-                    </Link>
-                  )}
-                </div>
-                <div className="px-3 pb-3 pt-2 border-t" style={{ borderColor: "var(--c-border)" }}>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--c-muted)] mb-2 px-1">Theme</p>
-                  <div className="grid grid-cols-3 gap-1">
-                    {([{ v: "dark" as const, Icon: MdDarkMode }, { v: "light" as const, Icon: MdLightMode }, { v: "auto" as const, Icon: MdBrightnessMedium }]).map(({ v, Icon }) => (
-                      <button key={v} onClick={() => setTheme(v)}
-                        className={`py-2 rounded-lg flex flex-col items-center gap-1 transition-all border
-                          ${theme === v ? "bg-violet-600/20 text-violet-400 border-violet-500/30" : "text-[var(--c-muted)] hover:bg-[var(--c-surface)] border-transparent"}`}>
-                        <Icon size={16} /><span className="text-[9px] font-bold uppercase">{v}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="p-2 border-t" style={{ borderColor: "var(--c-border)" }}>
-                  <button onClick={handleLogoutRequest}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors">
-                    <div className="flex items-center gap-3 font-medium text-sm"><MdLogout size={18} /> Sign Out</div>
-                    <kbd className="text-[9px] px-1.5 py-0.5 rounded border border-red-500/20 bg-red-500/5 font-mono">Ctrl+L</kbd>
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        {/* Profile moved to Sidebar */}
       </header>
-
-      {/* ── Logout confirm ── */}
-      <AnimatePresence>
-        {showLogoutConfirm && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm" onClick={() => setShowLogoutConfirm(false)} />
-            <div className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none p-4">
-              <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                className="pointer-events-auto w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
-                style={{ background: "var(--c-surface)", border: "1px solid rgba(239,68,68,0.3)" }}>
-                <div className="p-6 text-center">
-                  <div className="mx-auto w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
-                    <MdWarning className="text-red-500" size={32} />
-                  </div>
-                  <h3 className="text-xl font-bold text-[var(--c-text)]">Sign Out?</h3>
-                  <p className="text-sm text-[var(--c-muted)] mt-2">Anda akan mengakhiri sesi ini. Lanjutkan?</p>
-                </div>
-                <div className="flex p-4 gap-3" style={{ background: "rgba(0,0,0,0.1)" }}>
-                  <button onClick={() => setShowLogoutConfirm(false)}
-                    className="flex-1 py-2.5 rounded-xl font-bold text-sm text-[var(--c-text)] hover:opacity-80 transition"
-                    style={{ background: "var(--c-input-bg)", border: "1px solid var(--c-border)" }}>Cancel</button>
-                  <button onClick={confirmLogout}
-                    className="flex-1 py-2.5 rounded-xl font-bold text-sm text-white bg-red-600 hover:bg-red-500 transition">Sign Out</button>
-                </div>
-              </motion.div>
-            </div>
-          </>
-        )}
-      </AnimatePresence>
     </>
   );
 }

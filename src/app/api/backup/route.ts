@@ -19,7 +19,7 @@ function buildBackupEntries() {
 
   const manifest = {
     createdAt: new Date().toISOString(),
-    version: 'saturn-v4.4.2',
+    version: 'saturn-v5.0.0',
     counts: { users: users.length, notes: notes.length },
     important: 'Restore by replacing the /data/ folder. Passwords are bcrypt hashes.',
   };
@@ -34,7 +34,7 @@ function buildBackupEntries() {
     {
       name: 'RESTORE.md',
       content: [
-        '# Saturn Dashboard v4.4.2 — Data Backup',
+        '# Saturn Dashboard v5.0.0 — Data Backup',
         '',
         `Backup created: ${new Date().toISOString()}`,
         '',

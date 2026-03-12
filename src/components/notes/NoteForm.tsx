@@ -10,8 +10,8 @@ import {
 import Modal from "../ui/Modal";
 import ImageCropper from "../ui/ImageCropper";
 
-const CLOUD_NAME    = "dg3awuzug";
-const UPLOAD_PRESET = "ml_default";
+const CLOUD_NAME    = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "dg3awuzug";
+const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "ml_default";
 
 const COLORS = ["violet", "cyan", "pink", "amber", "teal", "blue"];
 

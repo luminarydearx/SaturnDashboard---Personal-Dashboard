@@ -1,6 +1,5 @@
 "use client";
 
-import BackupStatus from "@/components/ui/BackupStatus";
 import { useState, useEffect } from "react";
 import { PublicUser } from "@/types";
 import Sidebar from "@/components/layout/Sidebar";
@@ -9,8 +8,8 @@ import Footer from "@/components/layout/Footer";
 import BannedScreen from "@/components/BannedScreen";
 import StarBackground from "@/components/StarBackground";
 import { ThemeProvider } from "@/components/ui/ThemeContext";
+import SettingsModal from "@/components/ui/SettingsModal";
 // NOTE: ToastProvider is NOT imported here — layout.tsx provides it globally.
-// Having multiple ToastProvider instances causes "useToast outside provider" errors.
 
 interface Props {
   user: PublicUser;
@@ -18,19 +17,20 @@ interface Props {
 }
 
 export default function DashboardShell({ user, children }: Props) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen,    setMobileOpen]    = useState(false);
+  const [collapsed,     setCollapsed]     = useState(false);
+  const [settingsOpen,  setSettingsOpen]  = useState(false);
 
   useEffect(() => {
     try {
       const v = localStorage.getItem("sidebar-collapsed");
       if (v === "true") setCollapsed(true);
-    } catch { /* ignore */ }
+    } catch {}
   }, []);
 
   const toggle = () => {
-    setCollapsed(current => {
-      const next = !current;
+    setCollapsed(cur => {
+      const next = !cur;
       try { localStorage.setItem("sidebar-collapsed", String(next)); } catch {}
       return next;
     });
@@ -57,6 +57,7 @@ export default function DashboardShell({ user, children }: Props) {
           onClose={() => setMobileOpen(false)}
           collapsed={collapsed}
           onToggleCollapse={toggle}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
         <style>{`
           .dashboard-content { margin-left: 0; }
@@ -74,9 +75,6 @@ export default function DashboardShell({ user, children }: Props) {
           <Footer />
         </div>
       </div>
-      {(user.role === "owner" || user.role === "co-owner") && (
-        <BackupStatus autoTrigger={true} />
-      )}
     </ThemeProvider>
   );
 }
