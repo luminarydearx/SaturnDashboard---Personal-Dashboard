@@ -463,20 +463,6 @@ export default function AutoGenClient({ user: _user }: Props) {
         <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
           className="flex flex-col gap-5">
 
-            {/* Info banner */}
-            <div className="flex items-start gap-3 px-4 py-3 rounded-xl"
-              style={{ background: 'rgba(var(--c-accent-rgb),.07)', border: '1px solid rgba(var(--c-accent-rgb),.18)' }}>
-              <MdInfo size={17} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--c-accent)' }} />
-              <p className="text-[var(--c-muted)] text-xs leading-relaxed font-nunito">
-                Lockdown bekerja dengan push{' '}
-                <code className="font-mono" style={{ color:'var(--c-accent)' }}>project/AutoGen/public/lockdown.json</code>
-                {' '}ke repo{' '}
-                <strong className="text-[var(--c-text)]">{AUTOGEN_REPO_NAME}</strong>
-                {' '}(branch <code className="font-mono" style={{ color:'var(--c-accent)' }}>{BRANCH}</code>).
-                {' '}Vercel auto-deploy → site terkunci.
-              </p>
-            </div>
-
             {/* ── LOCKDOWN CONTROL CARD ────────────────────────────────────── */}
             <div className="rounded-2xl overflow-hidden"
               style={{ background: 'var(--c-surface)', border: '1px solid var(--c-border)' }}>
