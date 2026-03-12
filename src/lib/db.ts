@@ -20,6 +20,7 @@ function ensureDataDir() {
 }
 
 // Helper baca JSON dengan fallback aman
+// Helper baca JSON dengan fallback aman
 function readJson<T>(filename: string, defaultValue: T): T {
   ensureDataDir();
   const filePath = path.join(DATA_DIR, filename);
@@ -31,24 +32,20 @@ function readJson<T>(filename: string, defaultValue: T): T {
       return JSON.parse(content) as T;
     } catch (error) {
       console.error(`Error parsing ${filename}:`, error);
-      // Jika corrupt, kembalikan default
       return defaultValue;
     }
   }
 
-  // 2. Fallback KHUSUS LOKAL: Jika file tidak ada di /data, coba ambil dari template jika ada
-  // DI VERCEL: Kita TIDAK mencoba copy dari root karena file sensitif mungkin di-ignore .vercelignore
-  if (!IS_VERCEL) {
-    const templatePath = path.join(process.cwd(), 'data', `${filename}.example`);
-    if (fs.existsSync(templatePath)) {
-      try {
-        const content = fs.readFileSync(templatePath, 'utf-8');
-        const data = JSON.parse(content) as T;
-        // Simpan sebagai file asli
-        writeJson(filename, data);
-        return data;
-      } catch {}
-    }
+  // 2. Fallback: Coba copy dari bundled data/ (hanya untuk file non-sensitif)
+  // Ini penting agar Vercel punya data awal users.json, notes.json, dll
+  const bundledPath = path.join(process.cwd(), 'data', filename);
+  if (fs.existsSync(bundledPath) && !filename.includes('settings')) {
+    try {
+      const content = fs.readFileSync(bundledPath, 'utf-8');
+      // Copy ke lokasi aktif
+      fs.writeFileSync(filePath, content);
+      return JSON.parse(content) as T;
+    } catch {}
   }
 
   // 3. Jika tetap tidak ada, buat baru dengan default value
