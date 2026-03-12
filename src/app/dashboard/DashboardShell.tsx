@@ -75,6 +75,13 @@ export default function DashboardShell({ user, children }: Props) {
           <Footer />
         </div>
       </div>
+
+      {/* Settings Modal — opened from Sidebar profile popup */}
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        user={user}
+      />
     </ThemeProvider>
   );
 }
