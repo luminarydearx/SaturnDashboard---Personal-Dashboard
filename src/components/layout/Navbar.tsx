@@ -6,7 +6,7 @@ import { PublicUser } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
 import {
-  MdMenu, MdClose, MdSearch, MdAccessTime,
+  MdMenu, MdClose, MdSearch, MdAccessTime, MdChevronRight
 } from "react-icons/md";
 
 // ── Search registry — all searchable sections live here ──────────────────
