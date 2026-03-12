@@ -552,7 +552,7 @@ export default function AutoGenClient({ user: _user }: Props) {
                       className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm text-white transition-all"
                       style={{ background:'linear-gradient(135deg,#dc2626,#ef4444)' }}>
                       <MdLock size={16} />
-                      {(lockdownLoading || pushing) ? 'Memproses…' : '🔒 Aktifkan Lockdown Sekarang'}
+                      {(lockdownLoading || pushing) ? 'Memproses…' : 'Aktifkan Lockdown Sekarang'}
                     </button>
                   )}
                 </div>
