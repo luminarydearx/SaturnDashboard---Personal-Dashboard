@@ -21,11 +21,12 @@ async function getFileSha(
   branch: string = 'master'
 ): Promise<string | null> {
   try {
-    // ✅ FIX: Hapus spasi di URL
+    // ✅ FIX: URL tanpa spasi, query param ?ref=branch
     const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${branch}`;
     
     const response = await fetch(url, {
       headers: {
+        // ✅ FIX: Gunakan 'token' untuk classic PAT
         Authorization: `token ${token}`,
         Accept: 'application/vnd.github.v3+json',
       },
@@ -36,7 +37,10 @@ async function getFileSha(
       return data.sha || null;
     }
     
-    if (response.status === 404) return null;
+    if (response.status === 404) {
+      // File belum ada, return null agar bisa dibuat baru
+      return null;
+    }
     
     const errText = await response.text();
     console.error(`[getFileSha] ${filePath}: HTTP ${response.status} - ${errText}`);
@@ -62,12 +66,12 @@ async function pushFile(
     const body: Record<string, any> = {
       message,
       content: Buffer.from(content).toString('base64'),
-      branch,
+      branch, // GitHub API butuh branch di body
     };
     
     if (sha) body.sha = sha;
 
-    // ✅ FIX: Hapus spasi di URL
+    // ✅ FIX: URL tanpa spasi
     const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`;
 
     console.log(`[pushFile] ${filePath} -> ${url} (branch: ${branch}, hasSha: ${!!sha})`);
@@ -107,11 +111,6 @@ export async function pushToGithub(options: PushOptions): Promise<{ success: boo
     onProgress 
   } = options;
   
-  if (!token) {
-    console.error('[pushToGithub] Token is empty!');
-    return { success: false, pushed: 0, errors: ['GitHub token is missing'] };
-  }
-
   console.log(`[pushToGithub] Start: ${owner}/${repo}#${branch} (${files.length} files)`);
   
   const errors: string[] = [];

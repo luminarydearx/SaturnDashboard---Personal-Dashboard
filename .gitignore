@@ -46,4 +46,3 @@ dist-electron/
 # File that contains version info --- IGNORE ---
 note.txt
 *.zip
-data/*.json
