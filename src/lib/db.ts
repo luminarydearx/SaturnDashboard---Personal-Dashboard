@@ -132,6 +132,50 @@ export interface AutogenSchedule {
   unlockEnabled:     boolean;
   unlockAt:          string;
 }
+export interface AutogenAnnounce {
+  active:    boolean;
+  message:   string;
+  type:      'info' | 'warning' | 'success' | 'error';
+  link?:     string;
+  linkText?: string;
+  updatedAt: string;
+}
+
+export interface WebServerLockdown {
+  active:    boolean;
+  reason:    string;
+  timestamp: string;
+  mediaUrl?: string;
+}
+
+export interface WebServerAnnounce {
+  active:  boolean;
+  message: string;
+  type:    'info' | 'warning' | 'success' | 'error';
+  link?:   string;
+  linkText?: string;
+}
+
+export interface WebServerSchedule {
+  lockdownEnabled: boolean;
+  lockdownAt:      string;
+  lockdownReason:  string;
+  lockdownMediaUrl: string;
+  unlockEnabled:   boolean;
+  unlockAt:        string;
+}
+
+export interface WebServerConfig {
+  id:          string;   // 'memoire' | 'codelabx'
+  name:        string;
+  url:         string;
+  githubOwner: string;
+  githubRepo:  string;
+  vercelProjectId: string;
+  lockdown:    WebServerLockdown;
+  announce:    WebServerAnnounce;
+  schedule:    WebServerSchedule;
+}
 
 export interface Settings {
   // githubToken is intentionally absent — use process.env.GITHUB_TOKEN only
@@ -139,6 +183,8 @@ export interface Settings {
   githubOwner:       string;
   lastPush:          string;
   autogenSchedule?:  AutogenSchedule;
+  autogenAnnounce?:  AutogenAnnounce;
+  webServers?:       WebServerConfig[];
 }
 
 const DEFAULT_SCHEDULE: AutogenSchedule = {
@@ -169,11 +215,61 @@ export function getAutogenSchedule(): AutogenSchedule {
   return getSettings().autogenSchedule ?? { ...DEFAULT_SCHEDULE };
 }
 
+export function getAutogenAnnounce(): AutogenAnnounce {
+  return getSettings().autogenAnnounce ?? { active: false, message: '', type: 'info', link: '', linkText: '', updatedAt: '' };
+}
+
+export function saveAutogenAnnounce(ann: AutogenAnnounce): void {
+  saveSettings({ ...getSettings(), autogenAnnounce: ann });
+}
+
 export function saveAutogenSchedule(schedule: AutogenSchedule): void {
   saveSettings({ ...getSettings(), autogenSchedule: schedule });
 }
 
 // ── Backups registry ──────────────────────────────────────────────────────
+export const DEFAULT_WEB_SERVERS: WebServerConfig[] = [
+  {
+    id: 'memoire', name: 'Memoire', url: 'https://memoirepersonal.vercel.app',
+    githubOwner: 'luminarydearx', githubRepo: 'Memoire',
+    vercelProjectId: 'prj_LpWX4OLwSAixhd6qhzcTAZCtUUOL',
+    lockdown: { active: false, reason: '', timestamp: '' },
+    announce: { active: false, message: '', type: 'info' },
+    schedule: { lockdownEnabled: false, lockdownAt: '', lockdownReason: '', lockdownMediaUrl: '', unlockEnabled: false, unlockAt: '' },
+  },
+  {
+    id: 'codelabx', name: 'CodeLabX', url: 'https://code-lab-x.vercel.app',
+    githubOwner: 'luminarydearx', githubRepo: 'CodeLabX',
+    vercelProjectId: 'prj_VZ9ArdVjkMtXqZtGrJuohD1XMBIR',
+    lockdown: { active: false, reason: '', timestamp: '' },
+    announce: { active: false, message: '', type: 'info' },
+    schedule: { lockdownEnabled: false, lockdownAt: '', lockdownReason: '', lockdownMediaUrl: '', unlockEnabled: false, unlockAt: '' },
+  },
+];
+
+export function getWebServers(): WebServerConfig[] {
+  const s = getSettings();
+  return s.webServers ?? DEFAULT_WEB_SERVERS;
+}
+
+export function saveWebServers(servers: WebServerConfig[]): void {
+  const s = getSettings();
+  saveSettings({ ...s, webServers: servers });
+}
+
+export function getWebServerById(id: string): WebServerConfig | undefined {
+  return getWebServers().find(s => s.id === id);
+}
+
+export function updateWebServer(id: string, updates: Partial<WebServerConfig>): WebServerConfig | null {
+  const servers = getWebServers();
+  const idx = servers.findIndex(s => s.id === id);
+  if (idx < 0) return null;
+  servers[idx] = { ...servers[idx], ...updates };
+  saveWebServers(servers);
+  return servers[idx];
+}
+
 export function getBackups(): BackupEntry[] { return readJson<BackupEntry[]>('backups.json', []); }
 export function saveBackups(entries: BackupEntry[]): void { writeJson('backups.json', entries); }
 export function addBackupEntry(entry: BackupEntry): void {

@@ -64,12 +64,9 @@ const NAV_ITEMS = [
 ];
 
 const WEB_SERVER_ITEMS = [
-  {
-    href: "/dashboard/server/autogen",
-    label: "Auto Gen",
-    icon: MdCode,
-    roles: ["owner", "co-owner"],
-  },
+  { href: '/dashboard/server/autogen',   label: 'AutoGen',   icon: MdCode,    roles: ['owner','co-owner','admin','developer'] },
+  { href: '/dashboard/server/memoire',   label: 'Memoire',   icon: MdDns,     roles: ['owner','co-owner','admin'] },
+  { href: '/dashboard/server/codelabx', label: 'CodeLabX',  icon: MdComputer,roles: ['owner','co-owner','admin'] },
 ];
 
 const SERVER_ITEMS = [
@@ -87,33 +84,6 @@ const SERVER_ITEMS = [
   },
 ];
 
-const SETTINGS_ITEMS = [
-  {
-    href: "/dashboard/settings/my-notes",
-    label: "My Notes",
-    icon: MdNotes,
-    roles: ["owner", "co-owner", "admin", "developer", "user"],
-  },
-  {
-    href: "/dashboard/settings/profile",
-    label: "Profile",
-    icon: MdPerson,
-    roles: ["owner", "co-owner", "admin", "developer", "user"],
-  },
-  {
-    href: "/dashboard/settings/artifact",
-    label: "Artifact",
-    icon: MdDashboard,
-    roles: ["owner", "co-owner", "admin", "developer", "user"],
-  },
-  {
-    href: "/dashboard/settings/theme",
-    label: "Theme",
-    icon: MdDarkMode,
-    roles: ["owner", "co-owner", "admin", "developer", "user"],
-  },
-];
-
 // ── All sections for collapsed mode ───────────────────────────────────────
 const ALL_SECTIONS = [
   {
@@ -127,7 +97,7 @@ const ALL_SECTIONS = [
     id: "web",
     label: "Web Server",
     icon: MdDns,
-    roles: ["owner", "co-owner"],
+    roles: ["owner", "co-owner", "admin"],
     items: WEB_SERVER_ITEMS,
   },
   {
@@ -136,13 +106,6 @@ const ALL_SECTIONS = [
     icon: MdStorage,
     roles: ["owner", "co-owner", "admin", "developer", "user"],
     items: SERVER_ITEMS,
-  },
-  {
-    id: "settings",
-    label: "My Settings",
-    icon: MdSettings,
-    roles: ["owner", "co-owner", "admin", "developer", "user"],
-    items: SETTINGS_ITEMS,
   },
 ];
 
@@ -717,15 +680,11 @@ export default function Sidebar({
   onToggleCollapse,
   onOpenSettings,
 }: SidebarProps) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const [profileOpen, setProfileOpen] = useState(false);
   const [navOpen, setNavOpen] = useLocalBool("sidebar_nav_open", true);
   const [webOpen, setWebOpen] = useLocalBool("sidebar_web_open", true);
   const [serverOpen, setServerOpen] = useLocalBool("sidebar_server_open", true);
-  const [settingsOpen, setSettingsOpen] = useLocalBool(
-    "sidebar_settings_open",
-    true,
-  );
 
   const role = user.role as string;
   const sw = collapsed ? 68 : 260;
@@ -733,7 +692,6 @@ export default function Sidebar({
   const filteredNav = NAV_ITEMS.filter((i) => i.roles.includes(role));
   const filteredWeb = WEB_SERVER_ITEMS.filter((i) => i.roles.includes(role));
   const filteredServer = SERVER_ITEMS.filter((i) => i.roles.includes(role));
-  const filteredSettings = SETTINGS_ITEMS.filter((i) => i.roles.includes(role));
 
   // Sections visible in collapsed mode
   const visibleSections = ALL_SECTIONS.filter((s) => s.roles.includes(role))
@@ -901,25 +859,6 @@ export default function Sidebar({
                   onToggle={() => setServerOpen(!serverOpen)}
                 >
                   {filteredServer.map((i) => (
-                    <NavItem
-                      key={i.href}
-                      href={i.href}
-                      label={i.label}
-                      icon={i.icon}
-                      pathname={pathname}
-                      onClose={onClose}
-                    />
-                  ))}
-                </SectionGroup>
-              )}
-              {filteredSettings.length > 0 && (
-                <SectionGroup
-                  label="My Settings"
-                  icon={MdSettings}
-                  open={settingsOpen}
-                  onToggle={() => setSettingsOpen(!settingsOpen)}
-                >
-                  {filteredSettings.map((i) => (
                     <NavItem
                       key={i.href}
                       href={i.href}
