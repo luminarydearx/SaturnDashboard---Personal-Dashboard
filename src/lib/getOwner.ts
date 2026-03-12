@@ -1,25 +1,22 @@
 import { PublicUser } from "@/types";
-import fs from 'fs';
-import path from 'path';
 
 /**
  * Mengambil data user dengan role 'owner' dari users.json
- * @returns PublicUser | null
+ * @returns Promise<PublicUser | null>
+ * @note Fungsi ini sekarang async karena fetch ke API
  */
-export function getOwner(): PublicUser | null {
+export async function getOwner(): Promise<PublicUser | null> {
   try {
-    // Path absolut ke data/users.json di root project
-    // process.cwd() = root project, baik di lokal maupun Vercel
-    const usersPath = path.join(process.cwd(), 'data', 'users.json');
+    // Fetch ke API route server-side
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const res = await fetch(`${baseUrl}/api/owner`, { cache: 'no-store' });
     
-    // Baca file secara sync (hanya jalan di server, aman untuk Next.js)
-    const fileContent = fs.readFileSync(usersPath, 'utf-8');
-    const usersData = JSON.parse(fileContent) as PublicUser[];
+    if (!res.ok) return null;
     
-    const owner = usersData.find((user) => user.role === "owner");
-    return owner || null;
+    const { data } = await res.json();
+    return data || null;
   } catch (error) {
-    console.error('Failed to load owner from users.json:', error);
+    console.error('Failed to load owner:', error);
     return null;
   }
 }
@@ -27,16 +24,16 @@ export function getOwner(): PublicUser | null {
 /**
  * Helper untuk mendapatkan email owner dengan fallback
  */
-export function getOwnerEmail(fallback = "owner@saturndashboard.com"): string {
-  const owner = getOwner();
+export async function getOwnerEmail(fallback = "owner@saturndashboard.com"): Promise<string> {
+  const owner = await getOwner();
   return owner?.email || fallback;
 }
 
 /**
  * Helper untuk mendapatkan phone owner dalam format internasional (+62)
  */
-export function getOwnerPhone(fallback = "Contact via admin panel"): string {
-  const owner = getOwner();
+export async function getOwnerPhone(fallback = "Contact via admin panel"): Promise<string> {
+  const owner = await getOwner();
   if (!owner?.phone) return fallback;
   
   const cleaned = owner.phone.replace(/\D/g, "");
