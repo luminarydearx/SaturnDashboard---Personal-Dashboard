@@ -87,7 +87,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           pointerEvents: 'none',
         }}>
           {toasts.map(t => {
-            const Icon = ICONS[t.type];
+            const Icon = ICONS[t.type as ToastType];
             return (
               <div key={t.id} className="animate-slideInRight"
                 style={{
@@ -97,7 +97,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
                   boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                   pointerEvents: 'all',
-                  ...TOAST_STYLES[t.type],
+                  ...(TOAST_STYLES[t.type as ToastType] || {}),  
                 }}>
                 <Icon size={20} style={{ flexShrink: 0 }} />
                 <p style={{

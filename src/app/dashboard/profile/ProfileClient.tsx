@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import ImageCropper from "@/components/ui/ImageCropper";
+import QRCodeDisplay from "@/components/ui/QRCodeDisplay";
 import { useRouter } from "next/navigation";
 import { PublicUser } from "@/types";
 import { roleBadgeClass } from "@/lib/auth.utils";
@@ -11,6 +12,7 @@ import SavingOverlay from "@/components/ui/SavingOverlay";
 import {
   MdPerson, MdEmail, MdPhone, MdBadge, MdSave,
   MdCalendarToday, MdCameraAlt, MdRefresh, MdShield, MdLink,
+  MdQrCode2,
 } from "react-icons/md";
 import { format } from "date-fns";
 
@@ -290,6 +292,72 @@ export default function ProfileClient({ user }: { user: PublicUser }) {
                   <MdSave size={18} />
                   {saving ? <span className="animate-pulse">Saving…</span> : "Save Changes"}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* QR Code Card */}
+        <div className="rounded-2xl overflow-hidden shadow-xl" style={{ border: "1px solid var(--c-border)" }}>
+          {/* Header */}
+          <div className="flex items-center gap-3 px-6 py-4 border-b"
+            style={{ borderColor: "var(--c-border)", background: "rgba(var(--c-accent-rgb),.04)" }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "linear-gradient(135deg,rgba(var(--c-accent-rgb),.3),rgba(var(--c-accent2-rgb),.2))", border: "1px solid rgba(var(--c-accent-rgb),.2)" }}>
+              <MdQrCode2 size={18} style={{ color: "var(--c-accent)" }} />
+            </div>
+            <div>
+              <h2 className="font-orbitron text-sm font-bold text-[var(--c-text)]">QR Code Login</h2>
+              <p className="text-xs mt-0.5" style={{ color: "var(--c-muted)" }}>
+                Scan untuk login langsung tanpa username & password
+              </p>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="flex flex-col md:flex-row items-center gap-8 px-6 py-8"
+            style={{ background: "var(--dropdown-bg)" }}>
+            {/* QR Code */}
+            <div className="flex-shrink-0">
+              <QRCodeDisplay
+                userId={user.id}
+                username={user.username}
+                displayName={user.displayName}
+                avatar={user.avatar}
+                qrCodeUrl={(user as any).qrCodeUrl}
+                size={260}
+              />
+            </div>
+
+            {/* Info */}
+            <div className="flex flex-col gap-4 flex-1 max-w-sm">
+              <div className="rounded-xl p-4 flex flex-col gap-3"
+                style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--c-muted)" }}>
+                  Cara Penggunaan
+                </p>
+                {[
+                  { n: "1", text: "Klik Download PNG untuk menyimpan QR code kamu" },
+                  { n: "2", text: "Print atau simpan di hp kamu" },
+                  { n: "3", text: "Perlihatkan ke Scanner — di halaman login pilih Login dengan QR Code" },
+                  { n: "4", text: "Scanner akan membaca kode dan langsung masuk sebagai kamu" },
+                ].map(s => (
+                  <div key={s.n} className="flex items-start gap-3">
+                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5"
+                      style={{ background: "rgba(var(--c-accent-rgb),.2)", color: "var(--c-accent)" }}>
+                      {s.n}
+                    </span>
+                    <p className="text-sm" style={{ color: "var(--c-muted)" }}>{s.text}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-xl p-3 flex items-start gap-2"
+                style={{ background: "rgba(245,158,11,.06)", border: "1px solid rgba(245,158,11,.2)" }}>
+                <span className="text-amber-400 text-base flex-shrink-0">⚠️</span>
+                <p className="text-xs" style={{ color: "rgba(245,158,11,.8)" }}>
+                  Jangan bagikan QR Code ini kepada orang lain. QR ini memberikan akses langsung ke akun kamu.
+                </p>
               </div>
             </div>
           </div>

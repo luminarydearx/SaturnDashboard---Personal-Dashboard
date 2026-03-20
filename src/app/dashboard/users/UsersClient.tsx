@@ -1,4 +1,6 @@
 "use client";
+import QRSuccessModal from "@/components/ui/QRSuccessModal";
+import QRCodeDisplay from "@/components/ui/QRCodeDisplay";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
@@ -13,7 +15,7 @@ import {
   MdArrowUpward, MdArrowDownward, MdEdit, MdClose, MdSave,
   MdPerson, MdBadge, MdEmail, MdPhone, MdAdd, MdWork,
   MdVisibility, MdVisibilityOff, MdLock, MdRefresh, MdCameraAlt,
-} from "react-icons/md";
+  MdQrCode2} from "react-icons/md";
 import { format } from "date-fns";
 import ImageCropper from "@/components/ui/ImageCropper";
 
@@ -138,11 +140,11 @@ function AvatarUploader({ value, onChange, disabled }: { value: string; onChange
       {cropSrc && (
         <ImageCropper src={cropSrc} shape="round" onCancel={() => setCropSrc(null)} onCrop={handleCropDone} />
       )}
+
     </>
   );
 }
 
-/* ── User Preview Panel ── */
 const ROLE_COLORS: Record<string, string> = {
   owner:     "text-amber-400 border-amber-500/30 bg-amber-500/10",
   admin:     "text-cyan-400 border-cyan-500/30 bg-cyan-500/10",
@@ -209,7 +211,7 @@ function UserPreviewPanel({ form }: {
 }
 
 /* ── Add User Modal ── */
-function AddUserModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+function AddUserModal({ onClose, onAdded, onCreated }: { onClose: () => void; onAdded: () => void; onCreated: (user: any) => void }) {
   const [form, setForm] = useState({
     username: "", password: "", firstName: "", lastName: "",
     email: "", phone: "", bio: "", avatar: "", role: "user",
@@ -230,8 +232,15 @@ function AddUserModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
         body: JSON.stringify({ ...form, displayName: `${form.firstName} ${form.lastName}`.trim() || form.username }),
       });
       const data = await res.json();
-      if (data.success) { success("User created!"); await onAdded(); onClose(); }
-      else throw new Error(data.error || "Failed");
+      if (data.success) {
+        success("User created!");
+        await onAdded();
+        // Show QR modal with new user data
+        if (data.data?.id) {
+          onCreated(data.data);
+        }
+        onClose();
+      } else throw new Error(data.error || "Failed");
     } catch (err: any) { toastError(err.message); }
     finally { setLoading(false); }
   };
@@ -534,6 +543,7 @@ export default function UsersClient({ currentUser, highlightId }: { currentUser:
   const [search,        setSearch]        = useSessionState<string>("users_search", "");
   const [banTarget,     setBanTarget]     = useState<PublicUser | null>(null);
   const [editTarget,    setEditTarget]    = useState<PublicUser | null>(null);
+  const [viewTarget,    setViewTarget]    = useState<PublicUser | null>(null);
   const [addUserOpen,   setAddUserOpen]   = useState(false);
   const [deleteTarget,  setDeleteTarget]  = useState<PublicUser | null>(null);
   const [promoteTarget, setPromoteTarget] = useState<PublicUser | null>(null);
@@ -545,6 +555,27 @@ export default function UsersClient({ currentUser, highlightId }: { currentUser:
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(highlightId ?? null);
   const { success, error: toastError }   = useToast();
+  const [newUserForQR,  setNewUserForQR]  = useState<any>(null);
+  const [bulkQRLoading,     setBulkQRLoading]     = useState(false);
+  const [showBulkQRConfirm, setShowBulkQRConfirm] = useState(false);
+  const [bulkQRResult,      setBulkQRResult]       = useState<{ generated: number; failed: number } | null>(null);
+
+  const doBulkQR = async () => {
+    setShowBulkQRConfirm(false);
+    setBulkQRLoading(true);
+    setBulkQRResult(null);
+    try {
+      const res = await fetch("/api/users/qr-bulk-generate", { method: "POST" });
+      const d   = await res.json();
+      if (d.success) {
+        setBulkQRResult({ generated: d.generated, failed: d.failed });
+        await fetchUsers();
+      } else {
+        toastError(d.error || "Bulk QR gagal");
+      }
+    } catch { toastError("Koneksi gagal"); }
+    finally { setBulkQRLoading(false); }
+  };
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -612,11 +643,25 @@ export default function UsersClient({ currentUser, highlightId }: { currentUser:
           <h1 className="font-orbitron text-2xl font-bold text-[var(--c-text)]">User Management</h1>
           <p className="text-[var(--c-muted)] text-sm mt-1 font-nunito">{users.length} total users</p>
         </div>
-        {(currentUser.role === "owner" || currentUser.role === "co-owner") && (
-          <button onClick={() => setAddUserOpen(true)} className="btn-primary flex items-center gap-2">
-            <MdAdd size={20} /> Add User
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {currentUser.role === "owner" && (
+            <button
+              onClick={() => setShowBulkQRConfirm(true)}
+              disabled={bulkQRLoading}
+              title="Generate ulang QR Code untuk semua user"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+              style={{ background: "rgba(124,58,237,.1)", border: "1px solid rgba(124,58,237,.3)", color: "#a78bfa" }}>
+              {bulkQRLoading
+                ? <><MdRefresh size={14} className="animate-spin" /> Generating…</>
+                : <><MdQrCode2 size={14} /> Regenerate All QR</>}
+            </button>
+          )}
+          {(currentUser.role === "owner" || currentUser.role === "co-owner") && (
+            <button onClick={() => setAddUserOpen(true)} className="btn-primary flex items-center gap-2">
+              <MdAdd size={20} /> Add User
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="relative group">
@@ -667,19 +712,21 @@ export default function UsersClient({ currentUser, highlightId }: { currentUser:
                       <div className="min-w-0">
                         <p className="text-[var(--c-text)] text-sm font-semibold truncate">{u.displayName || u.username}</p>
                         <p className="text-[var(--c-muted)] text-xs">@{u.username}</p>
+                        <p className="text-[var(--c-muted)] text-xs font-mono truncate sm:hidden opacity-70">{u.email}</p>
+                        <span className={`sm:hidden mt-0.5 inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full border capitalize ${roleBadgeClass(u.role as any)}`}>{u.role}</span>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-[var(--c-muted)] text-xs font-mono hidden sm:table-cell">
                     <span className="truncate max-w-[140px] block">{u.email}</span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden sm:table-cell">
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border capitalize ${roleBadgeClass(u.role as any)}`}>{u.role}</span>
                   </td>
                   <td className="px-4 py-3 text-[var(--c-muted)] text-xs hidden lg:table-cell">
                     {format(new Date(u.createdAt), "MMM d, yyyy")}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden sm:table-cell">
                     {u.banned
                       ? <span className="flex items-center gap-1 text-red-400 text-xs font-semibold"><MdBlock size={13} /> Banned</span>
                       : <span className="flex items-center gap-1 text-emerald-400 text-xs font-semibold"><MdCheckCircle size={13} /> Active</span>}
@@ -688,7 +735,10 @@ export default function UsersClient({ currentUser, highlightId }: { currentUser:
                     {canManage(currentUser.role, u.role) ? (
                       <div className="flex items-center gap-0.5">
                         {currentUser.role === "owner" && (
-                          <button onClick={() => setEditTarget(u)} title="Edit" className="p-1.5 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"><MdEdit size={15} /></button>
+                          <>
+                            <button onClick={() => setViewTarget(u)} title="View QR Code" className="p-1.5 rounded-lg text-violet-400 hover:bg-violet-500/10 transition-colors"><MdQrCode2 size={15} /></button>
+                            <button onClick={() => setEditTarget(u)} title="Edit" className="p-1.5 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"><MdEdit size={15} /></button>
+                          </>
                         )}
                         {currentUser.role === "owner" && u.role === "user" && (
                           <button onClick={() => setPromoteTarget(u)} title="Promote to Admin" className="p-1.5 rounded-lg text-cyan-400 hover:bg-cyan-500/10 transition-colors"><MdArrowUpward size={15} /></button>
@@ -720,7 +770,7 @@ export default function UsersClient({ currentUser, highlightId }: { currentUser:
       {banTarget   && <BanModal target={banTarget} onClose={() => setBanTarget(null)}
         onConfirm={async reason => { await doAction(banTarget.id, "ban", { reason }); setBanTarget(null); }} />}
       {editTarget  && <EditUserModal target={editTarget} onClose={() => setEditTarget(null)} onSaved={fetchUsers} />}
-      {addUserOpen && <AddUserModal onClose={() => setAddUserOpen(false)} onAdded={fetchUsers} />}
+      {addUserOpen && <AddUserModal onClose={() => setAddUserOpen(false)} onAdded={fetchUsers} onCreated={u => setNewUserForQR(u)} />}
 
       <ConfirmModal isOpen={deleteTarget !== null}
         title={`Delete ${deleteTarget?.displayName || deleteTarget?.username}?`}
@@ -768,6 +818,74 @@ export default function UsersClient({ currentUser, highlightId }: { currentUser:
         target={editReasonTarget}
         onClose={() => setEditReasonTarget(null)}
         onSaved={() => { setEditReasonTarget(null); fetchUsers(); }} />}
+      {/* ── QR Success Modal after user creation ── */}
+      {newUserForQR && (
+        <QRSuccessModal
+          user={newUserForQR}
+          onClose={() => setNewUserForQR(null)}
+        />
+      )}
+
+      {/* ── Bulk QR Confirm ── */}
+      <ConfirmModal
+        isOpen={showBulkQRConfirm}
+        title="Regenerate Semua QR Code?"
+        message={`Semua QR Code untuk ${users.length ?? "semua"} user akan digenerate ulang. Proses ini membutuhkan beberapa detik.`}
+        type="warning"
+        confirmText="Ya, Generate Ulang"
+        cancelText="Batal"
+        onConfirm={doBulkQR}
+        onCancel={() => setShowBulkQRConfirm(false)}
+      />
+
+      {/* ── Bulk QR Result ── */}
+      {bulkQRResult && (
+        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl"
+          style={{ background: "var(--c-surface)", border: "1px solid rgba(34,197,94,.35)" }}>
+          <MdCheckCircle size={20} style={{ color: "#4ade80" }} />
+          <div>
+            <p className="text-sm font-bold text-[var(--c-text)]">Bulk QR Selesai</p>
+            <p className="text-xs" style={{ color: "var(--c-muted)" }}>
+              {bulkQRResult.generated} berhasil{bulkQRResult.failed > 0 ? `, ${bulkQRResult.failed} gagal` : ""}
+            </p>
+          </div>
+          <button onClick={() => setBulkQRResult(null)} className="ml-2" style={{ color: "var(--c-muted)" }}>✕</button>
+        </div>
+      )}
+
+      {/* ── View QR Code Modal ── */}
+      {viewTarget && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9000] flex items-center justify-center p-4"
+          onClick={() => setViewTarget(null)}>
+          <div className="w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
+            style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 px-5 py-4 border-b"
+              style={{ borderColor: "var(--c-border)", background: "rgba(var(--c-accent-rgb),.04)" }}>
+              <div className="w-10 h-10 rounded-xl overflow-hidden bg-gradient-to-br from-violet-600 to-cyan-600 flex-shrink-0">
+                {viewTarget.avatar
+                  ? <img src={viewTarget.avatar} alt={viewTarget.displayName} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center text-white font-bold text-lg">{(viewTarget.displayName||viewTarget.username)[0].toUpperCase()}</div>}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-[var(--c-text)] truncate">{viewTarget.displayName}</p>
+                <p className="text-xs capitalize" style={{ color: "var(--c-muted)" }}>@{viewTarget.username} · {viewTarget.role}</p>
+              </div>
+              <button onClick={() => setViewTarget(null)} className="p-1.5 rounded-lg text-xl leading-none" style={{ color: "var(--c-muted)" }}>✕</button>
+            </div>
+            <div className="p-6 flex flex-col items-center">
+              <QRCodeDisplay
+                userId={viewTarget.id}
+                username={viewTarget.username}
+                displayName={viewTarget.displayName}
+                avatar={viewTarget.avatar}
+                qrCodeUrl={(viewTarget as any).qrCodeUrl}
+                size={240}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

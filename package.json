@@ -3,7 +3,7 @@
   "version": "4.5.1",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -23,7 +23,10 @@
     "react-hot-toast": "^2.4.1",
     "react-icons": "^5.4.0",
     "sharp": "^0.33.5",
-    "uuid": "^11.0.5"
+    "uuid": "^11.0.5",
+    "recharts": "^2.15.0",
+    "qrcode": "^1.5.4",
+    "nodemailer": "^6.9.16"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.4",
@@ -36,12 +39,16 @@
     "electron-builder": "^25.1.8",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.1.4",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "@types/qrcode": "^1.5.5",
+    "@types/nodemailer": "^6.4.17"
   },
   "build": {
     "appId": "com.saturndashboard.app",
     "productName": "SaturnDashboard",
-    "directories": { "output": "dist-electron" },
+    "directories": {
+      "output": "dist-electron"
+    },
     "files": [
       ".next/**/*",
       "public/**/*",
@@ -51,9 +58,18 @@
       "package.json",
       "next.config.js"
     ],
-    "mac":   { "icon": "public/logo.png", "target": "dmg" },
-    "win":   { "icon": "public/logo.png", "target": "nsis" },
-    "linux": { "icon": "public/logo.png", "target": "AppImage" }
+    "mac": {
+      "icon": "public/logo.png",
+      "target": "dmg"
+    },
+    "win": {
+      "icon": "public/logo.png",
+      "target": "nsis"
+    },
+    "linux": {
+      "icon": "public/logo.png",
+      "target": "AppImage"
+    }
   },
   "main": "electron/main.js"
 }

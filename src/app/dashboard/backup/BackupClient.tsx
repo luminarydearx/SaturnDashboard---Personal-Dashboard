@@ -1,4 +1,5 @@
 "use client";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 import { useState, useCallback, useRef } from "react";
 import { PublicUser, BackupEntry } from "@/types";
@@ -32,6 +33,8 @@ export default function BackupClient({ user, initialBackups }: Props) {
   const [editId,   setEditId]   = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [log,      setLog]      = useState<string[]>([]);
+  const [deleteConfirmId,   setDeleteConfirmId]   = useState<string | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const { success, error: toastError } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -73,8 +76,16 @@ export default function BackupClient({ user, initialBackups }: Props) {
     setRunning("");
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete backup "${name}"?`)) return;
+  const handleDelete = (id: string, name: string) => {
+    setDeleteConfirmId(id);
+    setDeleteConfirmName(name);
+  };
+
+  const doDelete = async () => {
+    const id   = deleteConfirmId;
+    const name = deleteConfirmName;
+    setDeleteConfirmId(null);
+    if (!id) return;
     const res = await fetch("/api/backups", { method: "DELETE", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id }) });
     const d = await res.json();
     if (d.success) { setBackups((p: typeof initialBackups) => p.filter(b => b.id !== id)); success("Deleted"); addLog(`🗑️ Deleted "${name}"`); }

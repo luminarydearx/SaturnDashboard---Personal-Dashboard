@@ -1,4 +1,5 @@
 "use client";
+import { createPortal } from "react-dom";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -29,6 +30,12 @@ import {
   MdBrightnessMedium,
   MdWarning,
   MdRestore,
+  MdDescription,
+  MdHistory,
+  MdContentPaste,
+  MdAlarm,
+  MdRadar,
+  MdQrCode2,
 } from "react-icons/md";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -61,18 +68,46 @@ const NAV_ITEMS = [
     icon: MdPeople,
     roles: ["owner", "co-owner", "admin"],
   },
-];
-
-const WEB_SERVER_ITEMS = [
   {
-    href: "/dashboard/server/autogen",
-    label: "Auto Gen",
-    icon: MdCode,
-    roles: ["owner", "co-owner"],
+    href: "/dashboard/clipboard",
+    label: "Team Clipboard",
+    icon: MdContentPaste,
+    roles: ["owner", "co-owner", "admin", "developer", "user"],
+  },
+  {
+    href: "/dashboard/reminders",
+    label: "Reminders",
+    icon: MdAlarm,
+    roles: ["owner", "co-owner", "admin", "developer", "user"],
   },
 ];
 
+const WEB_SERVER_ITEMS = [
+  { href: '/dashboard/server/autogen',        label: 'AutoGen',       icon: MdCode,        roles: ['owner','co-owner','admin','developer'] },
+  { href: '/dashboard/server/autogen/drafts', label: 'AutoGen Drafts', icon: MdDescription, roles: ['owner','co-owner','admin'] },
+  { href: '/dashboard/server/memoire',   label: 'Memoire',   icon: MdDns,     roles: ['owner','co-owner','admin'] },
+  { href: '/dashboard/server/codelabx', label: 'CodeLabX',  icon: MdComputer,roles: ['owner','co-owner','admin'] },
+];
+
 const SERVER_ITEMS = [
+  {
+    href: "/dashboard/server/attendance",
+    label: "Attendance",
+    icon: MdQrCode2,
+    roles: ["owner", "co-owner"],
+  },
+  {
+    href: "/dashboard/server/status",
+    label: "Server Status",
+    icon: MdRadar,
+    roles: ["owner", "co-owner", "developer", "admin"],
+  },
+  {
+    href: "/dashboard/server/activity",
+    label: "Activity Logs",
+    icon: MdHistory,
+    roles: ["owner", "co-owner", "admin"],
+  },
   {
     href: "/dashboard/backup",
     label: "Backup",
@@ -84,33 +119,6 @@ const SERVER_ITEMS = [
     label: "Restore",
     icon: MdRestore,
     roles: ["owner"],
-  },
-];
-
-const SETTINGS_ITEMS = [
-  {
-    href: "/dashboard/settings/my-notes",
-    label: "My Notes",
-    icon: MdNotes,
-    roles: ["owner", "co-owner", "admin", "developer", "user"],
-  },
-  {
-    href: "/dashboard/settings/profile",
-    label: "Profile",
-    icon: MdPerson,
-    roles: ["owner", "co-owner", "admin", "developer", "user"],
-  },
-  {
-    href: "/dashboard/settings/artifact",
-    label: "Artifact",
-    icon: MdDashboard,
-    roles: ["owner", "co-owner", "admin", "developer", "user"],
-  },
-  {
-    href: "/dashboard/settings/theme",
-    label: "Theme",
-    icon: MdDarkMode,
-    roles: ["owner", "co-owner", "admin", "developer", "user"],
   },
 ];
 
@@ -127,7 +135,7 @@ const ALL_SECTIONS = [
     id: "web",
     label: "Web Server",
     icon: MdDns,
-    roles: ["owner", "co-owner"],
+    roles: ["owner", "co-owner", "admin"],
     items: WEB_SERVER_ITEMS,
   },
   {
@@ -136,13 +144,6 @@ const ALL_SECTIONS = [
     icon: MdStorage,
     roles: ["owner", "co-owner", "admin", "developer", "user"],
     items: SERVER_ITEMS,
-  },
-  {
-    id: "settings",
-    label: "My Settings",
-    icon: MdSettings,
-    roles: ["owner", "co-owner", "admin", "developer", "user"],
-    items: SETTINGS_ITEMS,
   },
 ];
 
@@ -285,7 +286,7 @@ function SectionGroup({
   );
 }
 
-// ── CollapsedSectionButton ─────────────────────────────────────────────────
+// ── CollapsedSectionButton — uses fixed positioning to escape overflow-hidden ──
 function CollapsedSectionButton({
   section,
   pathname,
@@ -295,103 +296,142 @@ function CollapsedSectionButton({
   pathname: string;
   onClose: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
-  const Icon = section.icon;
+  const [open,    setOpen]    = useState(false);
+  const [pos,     setPos]     = useState({ top: 0, left: 0 });
+  const btnRef    = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const Icon      = section.icon;
   const anyActive = section.items.some((i) => isActive(i.href, pathname));
 
+  const scheduleClose = () => {
+    closeTimer.current = setTimeout(() => setOpen(false), 150);
+  };
+  const cancelClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
+
+  const openFlyout = () => {
+    cancelClose();
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.top, left: r.right + 8 });
+    }
+    setOpen(true);
+  };
+
+  // Close on outside click / scroll
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      const flyout = document.getElementById(`flyout-${section.id}`);
+      if (btnRef.current?.contains(e.target as Node)) return;
+      if (flyout?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const s = () => setOpen(false);
+    document.addEventListener("mousedown", h);
+    window.addEventListener("scroll", s, true);
+    return () => {
+      document.removeEventListener("mousedown", h);
+      window.removeEventListener("scroll", s, true);
+    };
+  }, [open, section.id]);
+
   return (
-    <div
-      className="relative"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <>
       <button
+        ref={btnRef}
         type="button"
         title={section.label}
+        onClick={openFlyout}
+        onMouseEnter={openFlyout}
+        onMouseLeave={scheduleClose}
         className="w-full flex items-center justify-center p-2.5 rounded-xl transition-all"
         style={{
-          background: anyActive
+          background: anyActive || open
             ? "linear-gradient(135deg,rgba(var(--c-accent-rgb),.25),rgba(var(--c-accent2-rgb),.1))"
             : "transparent",
-          border: anyActive
+          border: anyActive || open
             ? "1px solid rgba(var(--c-accent-rgb),.25)"
             : "1px solid transparent",
-          color: anyActive ? "var(--c-accent)" : "var(--c-muted)",
+          color: anyActive || open ? "var(--c-accent)" : "var(--c-muted)",
         }}
       >
         <Icon size={20} />
       </button>
 
       <AnimatePresence>
-        {hovered && (
+        {open && typeof window !== "undefined" && createPortal(
           <motion.div
-            initial={{ opacity: 0, x: -6, scale: 0.96 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -4 }}
-            transition={{ duration: 0.12 }}
-            className="absolute top-0 left-full ml-2 rounded-xl shadow-2xl overflow-hidden z-[200] min-w-[190px]"
+            id={`flyout-${section.id}`}
+            initial={{ opacity: 0, x: -8, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0,  scale: 1    }}
+            exit={{    opacity: 0, x: -6, scale: 0.95 }}
+            transition={{ duration: 0.14, ease: [0.16,1,0.3,1] }}
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
             style={{
+              position: "fixed",
+              top:      pos.top,
+              left:     pos.left,
+              zIndex:   9999,
+              minWidth: 200,
               background: "var(--c-bg)",
               border: "1px solid var(--c-border)",
+              borderRadius: 16,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04)",
+              overflow: "hidden",
             }}
           >
-            <div
-              className="px-3 py-2 border-b"
-              style={{ borderColor: "var(--c-border)" }}
-            >
-              <p
-                className="text-[10px] font-bold uppercase tracking-widest"
-                style={{ color: "var(--c-muted)" }}
-              >
-                {section.label}
-              </p>
+            {/* Header */}
+            <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid var(--c-border)", background: "rgba(var(--c-accent-rgb),0.06)" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <Icon size={14} style={{ color: "var(--c-accent)", flexShrink: 0 }} />
+                <p style={{ fontSize:11, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color: "var(--c-muted)", margin:0 }}>
+                  {section.label}
+                </p>
+              </div>
             </div>
-            {section.items.map((item) => {
-              const ItemIcon = item.icon;
-              const active = isActive(item.href, pathname);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onClose}
-                  className="flex items-center gap-3 px-3 py-2.5 transition-colors"
-                  style={{
-                    color: active ? "var(--c-text)" : "var(--c-muted)",
-                    background: active
-                      ? "rgba(var(--c-accent-rgb),.1)"
-                      : "transparent",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!active)
-                      (e.currentTarget as HTMLElement).style.background =
-                        "var(--c-surface)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active)
-                      (e.currentTarget as HTMLElement).style.background =
-                        "transparent";
-                  }}
-                >
-                  <ItemIcon
-                    size={16}
-                    style={{ color: active ? "var(--c-accent)" : "inherit" }}
-                  />
-                  <span className="font-nunito font-semibold text-sm whitespace-nowrap">
-                    {item.label}
-                  </span>
-                  {active && (
-                    <MdChevronRight
-                      size={13}
-                      className="ml-auto text-violet-400"
-                    />
-                  )}
-                </Link>
-              );
-            })}
-          </motion.div>
+            {/* Items */}
+            <div style={{ padding: "4px 0" }}>
+              {section.items.map((item) => {
+                const ItemIcon = item.icon;
+                const active = isActive(item.href, pathname);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => { setOpen(false); onClose(); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "9px 14px",
+                      color: active ? "var(--c-text)" : "var(--c-muted)",
+                      background: active ? "rgba(var(--c-accent-rgb),0.1)" : "transparent",
+                      textDecoration: "none", transition: "background 0.1s",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!active) (e.currentTarget as HTMLElement).style.background = "var(--c-surface)";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!active) (e.currentTarget as HTMLElement).style.background = active ? "rgba(var(--c-accent-rgb),0.1)" : "transparent";
+                    }}
+                  >
+                    <ItemIcon size={16} style={{ color: active ? "var(--c-accent)" : "inherit", flexShrink: 0 }} />
+                    <span style={{ fontFamily: "Nunito, sans-serif", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", flex: 1 }}>
+                      {item.label}
+                    </span>
+                    {active && (
+                      <MdChevronRight size={14} style={{ color: "var(--c-accent)", marginLeft: "auto" }} />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </motion.div>,
+          document.body
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
 
@@ -429,12 +469,12 @@ function ProfilePopup({
     setShowLogout(false);
     onClose();
     const id = toast.loading("Signing out…");
-    await fetch("/api/auth/logout", { method: "POST" });
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {}
     toast.success("Signed out!", { id });
-    setTimeout(() => {
-      router.push("/");
-      router.refresh();
-    }, 600);
+    // Use window.location for instant, clean navigation (no stale Next.js router state)
+    setTimeout(() => { window.location.href = "/login"; }, 400);
   };
 
   const ROLE_CLR: Record<string, string> = {
@@ -717,15 +757,11 @@ export default function Sidebar({
   onToggleCollapse,
   onOpenSettings,
 }: SidebarProps) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const [profileOpen, setProfileOpen] = useState(false);
   const [navOpen, setNavOpen] = useLocalBool("sidebar_nav_open", true);
   const [webOpen, setWebOpen] = useLocalBool("sidebar_web_open", true);
   const [serverOpen, setServerOpen] = useLocalBool("sidebar_server_open", true);
-  const [settingsOpen, setSettingsOpen] = useLocalBool(
-    "sidebar_settings_open",
-    true,
-  );
 
   const role = user.role as string;
   const sw = collapsed ? 68 : 260;
@@ -733,7 +769,6 @@ export default function Sidebar({
   const filteredNav = NAV_ITEMS.filter((i) => i.roles.includes(role));
   const filteredWeb = WEB_SERVER_ITEMS.filter((i) => i.roles.includes(role));
   const filteredServer = SERVER_ITEMS.filter((i) => i.roles.includes(role));
-  const filteredSettings = SETTINGS_ITEMS.filter((i) => i.roles.includes(role));
 
   // Sections visible in collapsed mode
   const visibleSections = ALL_SECTIONS.filter((s) => s.roles.includes(role))
@@ -846,7 +881,7 @@ export default function Sidebar({
                 <CollapsedSectionButton
                   key={section.id}
                   section={section}
-                  pathname={pathname}
+                  pathname={pathname as string}
                   onClose={onClose}
                 />
               ))}
@@ -867,7 +902,7 @@ export default function Sidebar({
                       href={i.href}
                       label={i.label}
                       icon={i.icon}
-                      pathname={pathname}
+                      pathname={pathname as string}
                       onClose={onClose}
                     />
                   ))}
@@ -887,7 +922,7 @@ export default function Sidebar({
                         href={i.href}
                         label={i.label}
                         icon={i.icon}
-                        pathname={pathname}
+                        pathname={pathname as string}
                         onClose={onClose}
                       />
                     ))}
@@ -906,26 +941,7 @@ export default function Sidebar({
                       href={i.href}
                       label={i.label}
                       icon={i.icon}
-                      pathname={pathname}
-                      onClose={onClose}
-                    />
-                  ))}
-                </SectionGroup>
-              )}
-              {filteredSettings.length > 0 && (
-                <SectionGroup
-                  label="My Settings"
-                  icon={MdSettings}
-                  open={settingsOpen}
-                  onToggle={() => setSettingsOpen(!settingsOpen)}
-                >
-                  {filteredSettings.map((i) => (
-                    <NavItem
-                      key={i.href}
-                      href={i.href}
-                      label={i.label}
-                      icon={i.icon}
-                      pathname={pathname}
+                      pathname={pathname as string}
                       onClose={onClose}
                     />
                   ))}

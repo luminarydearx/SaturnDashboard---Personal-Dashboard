@@ -76,12 +76,13 @@ export interface SearchSection<T extends SearchResultItem = SearchResultItem> {
 }
 
 // ── Text highlight helper ─────────────────────────────────────────────────
-export function HighlightText({ text, query, className = '' }: { text: string; query: string; className?: string }) {
-  if (!query || query.length < 2) return <span className={className}>{text}</span>;
-  const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+export function HighlightText({ text, query, className = '' }: { text?: string; query: string; className?: string }) {
+  const safe = text ?? '';
+  if (!query || query.length < 2) return <span className={className}>{safe}</span>;
+  const parts = safe.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
   return (
     <span className={className}>
-      {parts.map((p, i) =>
+      {parts.map((p: string, i: number) =>
         p.toLowerCase() === query.toLowerCase()
           ? <mark key={i} className="bg-violet-500/30 text-violet-200 rounded px-0.5 not-italic">{p}</mark>
           : p

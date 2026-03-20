@@ -3,7 +3,9 @@ import { clearSessionCookie } from '@/lib/auth';
 
 export async function POST() {
   await clearSessionCookie();
-  return NextResponse.redirect(new URL('/', process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'));
+  // Return JSON only — let the client handle redirect
+  // (NextResponse.redirect from API causes issues with fetch() in some browsers)
+  return NextResponse.json({ success: true });
 }
 
 export async function GET() {

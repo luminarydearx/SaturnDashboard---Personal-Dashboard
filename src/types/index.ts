@@ -18,6 +18,8 @@ export interface User {
   bannedReason?: string;
   bannedByDisplayName?: string;
   bannedByRole?: Role;
+  qrCodeUrl?: string;   // Cloudinary URL of generated QR code image
+  qrToken?:   string;   // Unique token embedded in QR code
   createdAt: string;
   updatedAt: string;
 }

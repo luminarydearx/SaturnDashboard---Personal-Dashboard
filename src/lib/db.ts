@@ -21,7 +21,7 @@ function ensureDataDir() {
 
 // Helper baca JSON dengan fallback aman
 // Helper baca JSON dengan fallback aman
-function readJson<T>(filename: string, defaultValue: T): T {
+export function readJson<T>(filename: string, defaultValue: T): T {
   ensureDataDir();
   const filePath = path.join(DATA_DIR, filename);
 
@@ -54,7 +54,7 @@ function readJson<T>(filename: string, defaultValue: T): T {
 }
 
 // Helper tulis JSON
-function writeJson<T>(filename: string, data: T): void {
+export function writeJson<T>(filename: string, data: T): void {
   ensureDataDir();
   const filePath = path.join(DATA_DIR, filename);
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
@@ -132,6 +132,72 @@ export interface AutogenSchedule {
   unlockEnabled:     boolean;
   unlockAt:          string;
 }
+export interface AutogenLockdown {
+  active:    boolean;
+  reason:    string;
+  timestamp: string;
+  mediaUrl?: string;
+  routes?:   string[];
+}
+
+export interface AttendanceRecord {
+  id:          string;
+  userId:      string;
+  username:    string;
+  displayName: string;
+  role:        string;
+  avatar?:     string;
+  scannedAt:   string;   // ISO
+  ip?:         string;
+}
+
+export interface AutogenAnnounce {
+  active:    boolean;
+  message:   string;
+  type:      'info' | 'warning' | 'success' | 'error';
+  link?:     string;
+  linkText?: string;
+  updatedAt: string;
+}
+
+export interface WebServerLockdown {
+  active:    boolean;
+  reason:    string;
+  timestamp: string;
+  mediaUrl?: string;
+  routes?:   string[];   // undefined = full lockdown; array = route-specific
+}
+
+export interface WebServerAnnounce {
+  active:    boolean;
+  message:   string;
+  type:      'info' | 'warning' | 'success' | 'error';
+  link?:     string;
+  linkText?: string;
+  id?:       string;   // unique ID for localStorage dismiss tracking
+  updatedAt?: string;
+}
+
+export interface WebServerSchedule {
+  lockdownEnabled: boolean;
+  lockdownAt:      string;
+  lockdownReason:  string;
+  lockdownMediaUrl: string;
+  unlockEnabled:   boolean;
+  unlockAt:        string;
+}
+
+export interface WebServerConfig {
+  id:          string;   // 'memoire' | 'codelabx'
+  name:        string;
+  url:         string;
+  githubOwner: string;
+  githubRepo:  string;
+  vercelProjectId: string;
+  lockdown:    WebServerLockdown;
+  announce:    WebServerAnnounce;
+  schedule:    WebServerSchedule;
+}
 
 export interface Settings {
   // githubToken is intentionally absent — use process.env.GITHUB_TOKEN only
@@ -139,6 +205,9 @@ export interface Settings {
   githubOwner:       string;
   lastPush:          string;
   autogenSchedule?:  AutogenSchedule;
+  autogenAnnounce?:  AutogenAnnounce;
+  autogenLockdown?:  AutogenLockdown;
+  webServers?:       WebServerConfig[];
 }
 
 const DEFAULT_SCHEDULE: AutogenSchedule = {
@@ -146,6 +215,30 @@ const DEFAULT_SCHEDULE: AutogenSchedule = {
   lockdownReason: '',     lockdownMediaUrl: '',
   unlockEnabled: false,   unlockAt: '',
 };
+
+export function getAttendance(): AttendanceRecord[] {
+  return readJson<AttendanceRecord[]>('attendance.json', []);
+}
+
+export function addAttendance(rec: AttendanceRecord): void {
+  const all = getAttendance();
+  all.unshift(rec);
+  writeJson('attendance.json', all.slice(0, 2000));
+}
+
+export function updateUserQR(userId: string, qrCodeUrl: string, qrToken: string): void {
+  const users = getUsers();
+  const idx = users.findIndex(u => u.id === userId);
+  if (idx >= 0) {
+    (users[idx] as any).qrCodeUrl = qrCodeUrl;
+    (users[idx] as any).qrToken   = qrToken;
+    saveUsers(users);
+  }
+}
+
+export function getUserByQRToken(token: string): User | undefined {
+  return getUsers().find(u => (u as any).qrToken === token);
+}
 
 export function getSettings(): Settings {
   return readJson<Settings>('settings.json', {
@@ -169,11 +262,69 @@ export function getAutogenSchedule(): AutogenSchedule {
   return getSettings().autogenSchedule ?? { ...DEFAULT_SCHEDULE };
 }
 
+export function getAutogenLockdown(): AutogenLockdown {
+  return getSettings().autogenLockdown ?? { active: false, reason: '', timestamp: '' };
+}
+
+export function saveAutogenLockdown(lock: AutogenLockdown): void {
+  saveSettings({ ...getSettings(), autogenLockdown: lock });
+}
+
+export function getAutogenAnnounce(): AutogenAnnounce {
+  return getSettings().autogenAnnounce ?? { active: false, message: '', type: 'info', link: '', linkText: '', updatedAt: '' };
+}
+
+export function saveAutogenAnnounce(ann: AutogenAnnounce): void {
+  saveSettings({ ...getSettings(), autogenAnnounce: ann });
+}
+
 export function saveAutogenSchedule(schedule: AutogenSchedule): void {
   saveSettings({ ...getSettings(), autogenSchedule: schedule });
 }
 
 // ── Backups registry ──────────────────────────────────────────────────────
+export const DEFAULT_WEB_SERVERS: WebServerConfig[] = [
+  {
+    id: 'memoire', name: 'Memoire', url: 'https://memoirepersonal.vercel.app',
+    githubOwner: 'luminarydearx', githubRepo: 'Memoire',
+    vercelProjectId: 'prj_LpWX4OLwSAixhd6qhzcTAZCtUUOL',
+    lockdown: { active: false, reason: '', timestamp: '' },
+    announce: { active: false, message: '', type: 'info' },
+    schedule: { lockdownEnabled: false, lockdownAt: '', lockdownReason: '', lockdownMediaUrl: '', unlockEnabled: false, unlockAt: '' },
+  },
+  {
+    id: 'codelabx', name: 'CodeLabX', url: 'https://code-lab-x.vercel.app',
+    githubOwner: 'luminarydearx', githubRepo: 'CodeLabX',
+    vercelProjectId: 'prj_VZ9ArdVjkMtXqZtGrJuohD1XMBIR',
+    lockdown: { active: false, reason: '', timestamp: '' },
+    announce: { active: false, message: '', type: 'info' },
+    schedule: { lockdownEnabled: false, lockdownAt: '', lockdownReason: '', lockdownMediaUrl: '', unlockEnabled: false, unlockAt: '' },
+  },
+];
+
+export function getWebServers(): WebServerConfig[] {
+  const s = getSettings();
+  return s.webServers ?? DEFAULT_WEB_SERVERS;
+}
+
+export function saveWebServers(servers: WebServerConfig[]): void {
+  const s = getSettings();
+  saveSettings({ ...s, webServers: servers });
+}
+
+export function getWebServerById(id: string): WebServerConfig | undefined {
+  return getWebServers().find(s => s.id === id);
+}
+
+export function updateWebServer(id: string, updates: Partial<WebServerConfig>): WebServerConfig | null {
+  const servers = getWebServers();
+  const idx = servers.findIndex(s => s.id === id);
+  if (idx < 0) return null;
+  servers[idx] = { ...servers[idx], ...updates };
+  saveWebServers(servers);
+  return servers[idx];
+}
+
 export function getBackups(): BackupEntry[] { return readJson<BackupEntry[]>('backups.json', []); }
 export function saveBackups(entries: BackupEntry[]): void { writeJson('backups.json', entries); }
 export function addBackupEntry(entry: BackupEntry): void {
