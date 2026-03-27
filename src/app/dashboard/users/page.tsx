@@ -15,6 +15,6 @@ export default async function UsersPage({
   if (!session) redirect('/');
   const user = getUserById(session.userId);
   if (!user || (user.role !== 'owner' && user.role !== 'admin')) redirect('/dashboard');
-  const { password: _p, ...publicUser } = user;
+  const { password: _p, ...publicUser } = user!;
   return <UsersClient currentUser={publicUser} highlightId={(await searchParams)?.highlight} />;
 }

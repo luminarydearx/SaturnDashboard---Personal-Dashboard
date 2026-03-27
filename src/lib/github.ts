@@ -137,3 +137,19 @@ export async function pushToGithub(options: PushOptions): Promise<{ success: boo
   console.log('[pushToGithub] Done:', result);
   return result;
 }
+// ── Fetch a single file content from GitHub ──────────────────────────────────
+export async function fetchGithubFile(
+  token: string, owner: string, repo: string, path: string, branch = 'master'
+): Promise<string | null> {
+  try {
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.content) return Buffer.from(data.content, 'base64').toString('utf-8');
+    return null;
+  } catch { return null; }
+}

@@ -10,7 +10,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const user = getUserById(session.userId);
   if (!user) redirect('/');
 
-  const { password: _p, ...publicUser } = user;
+  const { password: _p, ...publicUser } = user!;
 
   return <DashboardShell user={publicUser}>{children}</DashboardShell>;
 }

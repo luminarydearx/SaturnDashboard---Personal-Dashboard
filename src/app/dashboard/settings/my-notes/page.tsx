@@ -15,7 +15,7 @@ export default async function MyNotesPage({
   if (!session) redirect('/');
   const user = getUserById(session.userId);
   if (!user) redirect('/');
-  const { password: _p, ...publicUser } = user;
+  const { password: _p, ...publicUser } = user!;
 
   // Only pass notes authored by this user
   const allNotes = getNotes();

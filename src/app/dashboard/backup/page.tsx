@@ -16,7 +16,7 @@ export default async function BackupPage() {
   const allowedRoles = ['owner', 'co-owner', 'admin', 'developer'];
   if (!allowedRoles.includes(user.role)) redirect('/dashboard');
 
-  const { password: _p, ...publicUser } = user;
+  const { password: _p, ...publicUser } = user!;
   const backups = getBackups();
   return <BackupClient user={publicUser} initialBackups={backups} />;
 }

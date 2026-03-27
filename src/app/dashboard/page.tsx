@@ -23,6 +23,6 @@ export default async function DashboardPage() {
     hiddenNotes: notes.filter((n) => n.hidden).length,
   };
 
-  const { password: _p, ...publicUser } = user;
+  const { password: _p, ...publicUser } = user!;
   return <DashboardHome user={publicUser} stats={stats} recentNotes={notes.slice(0, 5)} />;
 }

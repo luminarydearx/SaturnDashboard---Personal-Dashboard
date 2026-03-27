@@ -24,6 +24,7 @@ const GLOW: Record<string, string> = {
 };
 
 interface Props {
+  key?: React.Key;
   note: Note;
   currentUser: PublicUser;
   onEdit?: () => void;

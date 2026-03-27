@@ -45,6 +45,19 @@
     --c-card-hover:   rgba(var(--c-accent-rgb), 0.04);
   }
 
+  @layer utilities {
+    .no-password-toggle::-ms-reveal,
+    .no-password-toggle::-ms-clear {
+      display: none;
+    }
+  
+    .no-password-toggle::-webkit-credentials-auto-fill-button {
+      display: none !important;
+      visibility: hidden;
+      pointer-events: none;
+    }
+  }
+
   *, *::before, *::after { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
 

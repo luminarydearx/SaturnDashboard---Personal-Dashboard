@@ -32,7 +32,9 @@
     "updatedAt": "2026-03-11T02:13:02.491Z",
     "bannedBy": "owner-001",
     "bannedAt": "2026-03-11T02:13:02.491Z",
-    "bannedReason": "Kontol"
+    "bannedReason": "Kontol",
+    "qrCodeUrl": "https://res.cloudinary.com/dg3awuzug/image/upload/v1774593475/wxwnuq5e9th9qsu6fyqw.png",
+    "qrToken": "b9999690b9bc4055acc665b49eab5cf0"
   },
   {
     "id": "aa2ff4cd-07c5-430c-8dde-f40579e78865",
@@ -55,7 +57,7 @@
     "username": "pandluu4asla",
     "displayName": "Jagad Aslam",
     "firstName": "Jagad",
-    "lastName": "Aslam",
+    "lastName": "Aslams",
     "email": "jagadaslam10@gmail.com",
     "phone": "+6285791248313",
     "bio": "I have the one only 24karat gold labubu in the world",
@@ -64,6 +66,24 @@
     "password": "$2a$10$0FfF2SSb8JXQE7UVBB53xumYKIE/zCYw6FUBxjVmNjfAJ/THeRZWm",
     "banned": false,
     "createdAt": "2026-03-11T02:25:30.293Z",
-    "updatedAt": "2026-03-11T02:25:30.293Z"
+    "updatedAt": "2026-03-27T06:21:14.063Z"
+  },
+  {
+    "id": "user_1774591310716_nd9qyt",
+    "username": "dearlyfebri",
+    "displayName": "Jagad Test",
+    "firstName": "Jagad",
+    "lastName": "Test",
+    "email": "dearlyfebriano09@gmail.com",
+    "phone": "",
+    "bio": "",
+    "avatar": "",
+    "role": "developer",
+    "password": "$2a$10$7OuetQ8Nh0n2X75nGpMr9.itb0IfCc7pCFaBLUd8S73luYUCHWTni",
+    "banned": false,
+    "createdAt": "2026-03-27T06:01:50.715Z",
+    "updatedAt": "2026-03-27T06:01:50.715Z",
+    "qrCodeUrl": "https://res.cloudinary.com/dg3awuzug/image/upload/v1774591320/avtzzbjigebpxotmbic3.png",
+    "qrToken": "c6a8df06c02d4c5aa409e7ac5b4e2950"
   }
 ]

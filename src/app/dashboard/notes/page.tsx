@@ -15,6 +15,6 @@ export default async function NotesPage({
   if (!session) redirect('/');
   const user = getUserById(session.userId);
   if (!user) redirect('/');
-  const { password: _p, ...publicUser } = user;
+  const { password: _p, ...publicUser } = user!;
   return <NotesClient user={publicUser} highlightId={(await searchParams)?.highlight} />;
 }

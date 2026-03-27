@@ -11,6 +11,6 @@ export default async function ThemePage() {
   if (!session) redirect('/');
   const user = getUserById(session.userId);
   if (!user) redirect('/');
-  const { password: _p, ...publicUser } = user;
+  const { password: _p, ...publicUser } = user!;
   return <ThemeClient user={publicUser} />;
 }

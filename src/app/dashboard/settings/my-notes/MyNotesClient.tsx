@@ -14,6 +14,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
+  key?: React.Key;
   user: PublicUser;
   initialNotes: Note[];
   highlightId?: string;

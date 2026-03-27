@@ -12,6 +12,6 @@ export default async function SettingsPage() {
   const user = getUserById(session.userId);
   if (!user || user.role !== 'owner') redirect('/dashboard');
   const settings = getSettings();
-  const { password: _p, ...publicUser } = user;
+  const { password: _p, ...publicUser } = user!;
   return <SettingsClient user={publicUser} settings={settings} />;
 }

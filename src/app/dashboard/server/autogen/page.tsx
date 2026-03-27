@@ -11,6 +11,6 @@ export default async function AutoGenPage() {
   if (session.role !== 'owner' && session.role !== 'co-owner') redirect('/dashboard');
   const user = getUserById(session.userId);
   if (!user) redirect('/');
-  const { password: _p, ...publicUser } = user;
+  const { password: _p, ...publicUser } = user!;
   return <AutoGenClient user={publicUser} />;
 }

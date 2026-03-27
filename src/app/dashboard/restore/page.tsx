@@ -11,6 +11,6 @@ export default async function RestorePage() {
   if (!session) redirect('/');
   const user = getUserById(session.userId);
   if (!user || user.role !== 'owner') redirect('/dashboard');
-  const { password: _p, ...publicUser } = user;
+  const { password: _p, ...publicUser } = user!;
   return <RestoreClient user={publicUser} />;
 }

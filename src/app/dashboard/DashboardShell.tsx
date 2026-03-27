@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PublicUser } from "@/types";
 import Sidebar from "@/components/layout/Sidebar";
 import Navbar from "@/components/layout/Navbar";
@@ -9,7 +10,7 @@ import BannedScreen from "@/components/BannedScreen";
 import StarBackground from "@/components/StarBackground";
 import { ThemeProvider } from "@/components/ui/ThemeContext";
 import SettingsModal from "@/components/ui/SettingsModal";
-// NOTE: ToastProvider is NOT imported here — layout.tsx provides it globally.
+import { loadShortcuts, matchesShortcut } from "@/lib/shortcuts";
 
 interface Props {
   user: PublicUser;
@@ -17,9 +18,10 @@ interface Props {
 }
 
 export default function DashboardShell({ user, children }: Props) {
-  const [mobileOpen,    setMobileOpen]    = useState(false);
-  const [collapsed,     setCollapsed]     = useState(false);
-  const [settingsOpen,  setSettingsOpen]  = useState(false);
+  const [mobileOpen,   setMobileOpen]   = useState(false);
+  const [collapsed,    setCollapsed]    = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     try {
@@ -35,6 +37,28 @@ export default function DashboardShell({ user, children }: Props) {
       return next;
     });
   };
+
+  // Global keyboard shortcuts (logout, open settings) — dynamic from localStorage
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const tag    = (e.target as HTMLElement)?.tagName;
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable;
+      if (typing) return;
+
+      const sc = loadShortcuts(user.id);
+
+      if (matchesShortcut(e, sc.logout)) {
+        e.preventDefault();
+        fetch("/api/auth/logout", { method: "POST" }).catch(() => {}).finally(() => { window.location.href = "/login"; });
+      }
+      if (matchesShortcut(e, sc.openSettings)) {
+        e.preventDefault();
+        setSettingsOpen(prev => !prev);
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [router]);
 
   if (user.banned) {
     return (
@@ -76,7 +100,6 @@ export default function DashboardShell({ user, children }: Props) {
         </div>
       </div>
 
-      {/* Settings Modal — opened from Sidebar profile popup */}
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
