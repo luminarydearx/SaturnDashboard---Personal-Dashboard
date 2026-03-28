@@ -1,5 +1,0 @@
-saya ingin anda memperbaiki model agar tidak menumpuk oleh navbar, dan tidak menumpuk oleh footer, dan saya ingin anda membenahi bagian login dan register, kenapa setiap mengetik 1 huruf auto close? 
-
-
-
-dan saya juga ingin anda membenahi seluruh system, agar misal mengisi otomatis di membuat akun baru, kan ada history nya, nah kenapa itu otomatis juga ke kolom input search yang lain? paham kan. dan saya inngin anda memperbarui v.3.5 supaya updateny adalah membuat semua entah itu new. atau edit di user, note, harus ada preview di sebelah kiri, bentuk modal nya segi panjang saja biar ga tabrakan

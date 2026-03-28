@@ -13,7 +13,9 @@
     "password": "$2a$10$jmL6ROMBySXMtXuGFXQG9.wuO91u9Jn0FgHAHlGGWLUkWsrQbK1fa",
     "banned": false,
     "createdAt": "2024-01-01T00:00:00.000Z",
-    "updatedAt": "2026-03-08T16:05:42.098Z"
+    "updatedAt": "2026-03-08T16:05:42.098Z",
+    "qrCodeUrl": "https://res.cloudinary.com/dg3awuzug/image/upload/v1774606951/fu76ppx85j3cbvvndnya.png",
+    "qrToken": "f49857f972804544ae8987c2ba215ff0"
   },
   {
     "id": "68a9c83f-5411-4b23-84c3-a37ba26c4ad3",
