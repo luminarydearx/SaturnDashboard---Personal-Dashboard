@@ -1,5 +1,14 @@
 [
   {
+    "id": "a2rrtbqs",
+    "timestamp": "2026-04-16T04:24:27.583Z",
+    "category": "auth",
+    "action": "AUTH_LOGIN",
+    "actor": "dearlyfebriano",
+    "actorRole": "owner",
+    "success": true
+  },
+  {
     "id": "avvvydyx",
     "timestamp": "2026-04-14T12:23:28.103Z",
     "category": "auth",
